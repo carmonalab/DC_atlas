@@ -1,0 +1,31 @@
+---
+title: "Load all datasets in Gerhard et al. metanalysis, and convert to Seurat"
+author: "Massimo Andreatta & Santiago Carmona"
+#output: html_notebook
+---
+
+```{r}
+renv::restore()
+```
+
+Libraries
+```{r}
+library(ggplot2)
+library(Seurat)
+library(tidyr)
+library(SeuratObject)
+#remotes::install_github("mojaveazure/seurat-disk")
+library(SeuratDisk)
+```
+
+Read in data for individual studies
+```{r}
+ddir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
+
+files <- list.files(path=ddir, pattern = "\\.h5ad$", full.names = T)
+f <- files[1]
+
+Convert(f, dest = "h5seurat", overwrite = TRUE)
+f.seu <- LoadH5Seurat(file=sprintf(f,"%s.h5seurat"))
+
+```
