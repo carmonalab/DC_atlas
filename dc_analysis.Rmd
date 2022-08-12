@@ -250,5 +250,10 @@ for (s in names(dc.seurat)) {
 }
 wrap_plots(pll, ncol = 2)
 
-ggsave("plots/Gerhard_sets_scGate_multi.pdf", height=32, width=12)
+ggsave("plots/Gerhard_sets_scGate_multi.pdf", height=32, width=11)
+```
+
+Save - with annotations
+```{r}
+saveRDS(dc.seurat, file=sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
 ```
