@@ -1,0 +1,190 @@
+---
+title: "Load all datasets in Gerhard et al. metanalysis, and convert to Seurat"
+author: "Massimo Andreatta & Santiago Carmona"
+#output: html_notebook
+---
+
+```{r}
+renv::restore()
+```
+
+Libraries
+```{r}
+library(ggplot2)
+library(Seurat)
+library(tidyr)
+library(SeuratObject)
+library(Matrix)
+library(patchwork)
+```
+
+#NB: for conversion between Scanpy format to matrix files, see export_data.py script
+
+Read in data for individual studies
+```{r}
+pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
+ddir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM/exported"
+
+studies <- list.dirs(path=ddir, full.names = FALSE)
+studies <- studies[nchar(studies)>0]
+
+names <- gsub("_\\S+","",studies, perl=T)
+
+seurat.list <- list()
+
+for (i in seq_along(studies)) {
+  s = studies[i]
+  proj = names[i]
+   
+  data <- t(readMM(file = sprintf("%s/%s/matrix.mtx", ddir, s)))
+
+  cell.names <- read.table(sprintf("%s/%s/barcodes.tsv", ddir, s), sep="\t", header=T)[,1]
+  gene.names <- read.table(sprintf("%s/%s/genes.tsv", ddir, s), sep="\t", header=T)[,1]
+  meta <- read.table(sprintf("%s/%s/metadata.csv",ddir,s), sep=",",header=T)[,-1]
+  rownames(meta) <- cell.names
+  rownames(data) <- gene.names
+  colnames(data) <- cell.names 
+   
+  seurat.list[[proj]] <- CreateSeuratObject(counts=data, project=proj, assay="RNA", meta.data = meta)
+  seurat.list[[proj]]$Study <- proj
+  
+  #mito and ribo content
+  patterns <- c("^RP[LS]","^MT-")
+
+  pc.ribo <- PercentageFeatureSet(seurat.list[[proj]], pattern = patterns[1])
+  pc.mito <- PercentageFeatureSet(seurat.list[[proj]], pattern = patterns[2])
+  
+  seurat.list[[proj]] <- AddMetaData(seurat.list[[proj]], metadata = pc.ribo, col.name = "percent.ribo")
+  seurat.list[[proj]] <- AddMetaData(seurat.list[[proj]], metadata = pc.mito, col.name = "percent.mito")
+  
+}
+
+##And save the list of object to disk
+
+#saveRDS(seurat.list, file="Gerhard_metanalysis_seuratlist.rds")
+saveRDS(seurat.list, file=sprintf("%s/Gerhard_metanalysis_seuratlist.rds",pdir))
+```
+
+Data in counts slot appear to be already normalized?
+
+How is that possible, if 10x files were read in?
+```{r}
+lapply(seurat.list, function(x) {
+  c <- colSums(x@assays$RNA@counts)
+  head(c)
+})
+
+
+#maybe normalized, but not log-normalized (?)
+hist(seurat.list[[1]]@assays$RNA@counts["CD74",], breaks=50)
+hist(seurat.list[[1]]@assays$RNA@counts["CCR7",], breaks=50)
+hist(seurat.list[[1]]@assays$RNA@counts["XCR1",], breaks=50)
+```
+
+
+
+Basic exploration of data
+```{r}
+plots <- list()
+
+ndim=30
+for (i in seq_along(seurat.list)) {
+  s = names(seurat.list)[i]
+  
+  obj <- seurat.list[[s]]
+  obj <- NormalizeData(obj) #Counts are not integers...? already normalized?
+  
+  obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+  obj <- ScaleData(obj, do.scale = TRUE, do.center = TRUE, verbose = F) 
+  obj <- RunPCA(object = obj, features = obj@assays$RNA@var.features, npcs = ndim, verbose = F)
+  
+  obj <- RunUMAP(obj, reduction = "pca", dims = 1:ndim, seed.use=123, verbose = F)
+  plots[[s]] <- DimPlot(obj, reduction = "umap", group.by = "state", label = T) + ggtitle(s) + NoLegend() +
+             theme(axis.title=element_blank(),axis.text=element_blank(),axis.ticks=element_blank())
+}
+```
+
+```{r fig.height=8, fig.width=16}
+wrap_plots(plots, ncol=4)
+
+ggsave("plots/Gerhard_sets_unsup_umap.pdf", width = 24, height=15)
+```
+
+
+#Focus on DCs only
+```{r}
+lapply(seurat.list, function(x) {unique(x$state)})
+
+# brownSpleen, martin, qian, qianbc, qiancrc, qianlung, qianovarian are focused on DCs only
+
+# for the rest, subset on DCs
+
+dc.seurat <- seurat.list
+
+dc.seurat$villani <- subset(dc.seurat$villani, subset=state %in% c("vi-DC1",
+                                                                   "vi-DC5",
+                                                                   "vi-DC2",
+                                                                   "vi-DC3",
+                                                                   "vi-DC6",
+                                                                   "vi-DC4"))
+dc.seurat$zhang <- subset(dc.seurat$zhang, subset=state %in% c("zhH-DC-C2-FCER1A",
+                                                               "zhH-DC-C4-LAMP3",
+                                                               "zhH-DC-C3-CLEC9A",
+                                                               "zhH-DC-C1-CD1C" ))
+
+dc.seurat$zhangcrc <- subset(dc.seurat$zhangcrc, subset=state %in% c("zhC-hM03_cDC2-CD1C",
+                                                                     "zhC-hM04_cDC1-BATF3",
+                                                                     "zhC-hM02_pDC-LILRA4" ))
+
+dc.seurat$zilionis <- subset(dc.seurat$zilionis, subset=state %in% c("zi-tMonoDC",
+                                                                     "zi-tDC1",
+                                                                     "zi-tDC2",
+                                                                     "zi-tDC3",
+                                                                     "zi-tpDC"))
+
+saveRDS(dc.seurat, file=sprintf("%s/Gerhard_metanalysis_seuratlist.DC.rds",pdir))
+```
+
+Basic exploration of data
+```{r}
+plots <- list()
+
+ndim=15
+for (s in names(dc.seurat)) {
+  
+  dc.seurat[[s]] <- NormalizeData(dc.seurat[[s]])
+  dc.seurat[[s]] <- FindVariableFeatures(dc.seurat[[s]], selection.method = "vst", nfeatures = 500, verbose = FALSE)
+  dc.seurat[[s]] <- ScaleData(dc.seurat[[s]], verbose = F) |> RunPCA(npcs = ndim, verbose=F)
+  
+  dc.seurat[[s]] <- RunUMAP(dc.seurat[[s]], reduction = "pca", dims = 1:ndim, seed.use=123, verbose = F)
+  plots[[s]] <- DimPlot(dc.seurat[[s]], reduction = "umap", group.by = "state", label = T) + ggtitle(s) + NoLegend() +
+             theme(axis.title=element_blank(),axis.text=element_blank(),axis.ticks=element_blank())
+}
+```
+
+```{r fig.height=8, fig.width=16}
+wrap_plots(plots, ncol=4)
+
+ggsave("plots/Gerhard_sets_unsup_DC.pdf", width = 24, height=15)
+```
+
+
+```{r fig.height=3}
+table(dc.seurat$zilionis$Patient)
+a <- DimPlot(dc.seurat$zilionis, reduction="umap", group.by = "Patient") + theme(aspect.ratio = 1)
+b <- DimPlot(dc.seurat$zilionis, reduction="umap", group.by = "state") + theme(aspect.ratio = 1)
+
+a | b
+#cDC1
+FeaturePlot(dc.seurat$zilionis, features=c("CLEC9A","XCR1","BATF3","CD74"))
+#cDC2
+FeaturePlot(dc.seurat$zilionis, features=c("CLEC10A","AIF1","VASP","CD207"))
+#DC3
+FeaturePlot(dc.seurat$zilionis, features=c("CCR7","LAMP3","FSCN1","BIRC3"))
+#pDC
+FeaturePlot(dc.seurat$zilionis, features=c("IRF7","PLAC8","LILRA4","IRF8"))
+
+FeaturePlot(dc.seurat$zilionis, features=c("nFeature_RNA","nCount_RNA","percent.ribo","percent.mito"))
+
+```
+
