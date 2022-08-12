@@ -10,12 +10,18 @@ renv::restore()
 
 Libraries
 ```{r}
+#remotes::install_github('carmonalab/UCell')
+#remotes::install_github('carmonalab/scGate')
+
 library(ggplot2)
 library(Seurat)
 library(tidyr)
 library(SeuratObject)
 library(Matrix)
 library(patchwork)
+library(remotes)
+library(UCell)
+library(scGate)
 ```
 
 #NB: for conversion between Scanpy format to matrix files, see export_data.py script
@@ -175,16 +181,74 @@ a <- DimPlot(dc.seurat$zilionis, reduction="umap", group.by = "Patient") + theme
 b <- DimPlot(dc.seurat$zilionis, reduction="umap", group.by = "state") + theme(aspect.ratio = 1)
 
 a | b
-#cDC1
-FeaturePlot(dc.seurat$zilionis, features=c("CLEC9A","XCR1","BATF3","CD74"))
-#cDC2
-FeaturePlot(dc.seurat$zilionis, features=c("CLEC10A","AIF1","VASP","CD207"))
-#DC3
-FeaturePlot(dc.seurat$zilionis, features=c("CCR7","LAMP3","FSCN1","BIRC3"))
-#pDC
-FeaturePlot(dc.seurat$zilionis, features=c("IRF7","PLAC8","LILRA4","IRF8"))
+```
 
-FeaturePlot(dc.seurat$zilionis, features=c("nFeature_RNA","nCount_RNA","percent.ribo","percent.mito"))
+```{r}
+dset <- "brownSpleen"
+#cDC1
+FeaturePlot(dc.seurat[[dset]], features=c("CLEC9A","XCR1","BATF3","C1orf54"))
+FeaturePlot(dc.seurat[[dset]], features=c("CPNE3","CPVL","CADM1","WDFY4"))
+
+#cDC2
+FeaturePlot(dc.seurat[[dset]], features=c("CD1C","SIRPA","ITGAM","CD207"))
+FeaturePlot(dc.seurat[[dset]], features=c("CLEC10A","AIF1","FCER1A","CD1A"))
+#DC3
+FeaturePlot(dc.seurat[[dset]], features=c("CCR7","LAMP3","FSCN1","BIRC3"))
+#pDC
+FeaturePlot(dc.seurat[[dset]], features=c("IRF7","PLAC8","LILRA4","TCF4"))
+FeaturePlot(dc.seurat[[dset]], features=c("IRF7","GZMB","IL3RA","IRF8"))
+
+FeaturePlot(dc.seurat[[dset]], features=c("nFeature_RNA","nCount_RNA","percent.ribo","percent.mito"))
 
 ```
 
+Can we build simple signatures based on marker genes?
+```{r}
+sigs <- list()
+
+sigs$cDC1 <- c("CLEC9A","XCR1","BATF3","CADM1")
+sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCER1A")
+sigs$DC3 <- c("LAMP3","CCR7","FSCN1","IL3RA")
+sigs$pDC <- c("IRF7","LILRA4","TCF4")
+
+dc.seurat <- lapply(dc.seurat, function(x) {
+  dc.seurat <- AddModuleScore_UCell(x, features=sigs, name=NULL)
+  SmoothKNN(dc.seurat, signature.names = names(sigs), reduction = "pca")
+})
+```
+
+```{r fig.height=3}
+for (s in names(dc.seurat)) {
+  p <- FeaturePlot(dc.seurat[[s]], features=paste0(names(sigs),"_kNN"))
+  plot(p)
+}
+```
+Try assigning labels based on scGate (simple models)
+```{r}
+ss <- list()
+ss$cDC1 <- gating_model(name="cDC1", signature = sigs$cDC1)
+ss$cDC2 <- gating_model(name="cDC2", signature = sigs$cDC2)
+ss$DC3 <- gating_model(name="DC3", signature = sigs$DC3)
+ss$pDC <- gating_model(name="pDC", signature = sigs$pDC)
+
+dc.seurat <- lapply(dc.seurat, function(x) {
+  scGate(x, model=ss, reduction = "pca", ncores = 4)
+})
+```
+
+
+```{r fig.height=12, fig.width=4}
+library(RColorBrewer)
+palette <- brewer.pal(n=5, name="Set3")
+names(palette) <- c(names(sigs), "Multi")
+
+pll <- list()
+i <- 0
+for (s in names(dc.seurat)) {
+  pll[[i <- i+1]] <- DimPlot(dc.seurat[[s]], group.by = "scGate_multi", cols = palette) + theme(aspect.ratio = 1)
+  pll[[i <- i+1]] <- DimPlot(dc.seurat[[s]], group.by = "state") + theme(aspect.ratio = 1) + ggtitle(s)
+}
+wrap_plots(pll, ncol = 2)
+
+ggsave("plots/Gerhard_sets_scGate_multi.pdf", height=32, width=12)
+```
