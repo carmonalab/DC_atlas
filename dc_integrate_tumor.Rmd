@@ -8,6 +8,8 @@ author: "Massimo Andreatta & Santiago Carmona"
 renv::restore()
 ```
 
+#Only use tumor samples (exclude blood and spleen)
+
 Libraries
 ```{r}
 #remotes::install_github('carmonalab/UCell')
@@ -33,6 +35,12 @@ pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 seurat.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
 ```
 
+Tissue
+```{r}
+#only tumor samples
+seurat.list <- seurat.list[(c("qian","qianbc","qiancrc","qianlung","qianovarian","zhang","zhangcrc","zilionis"))]
+```
+
 See batch effects
 ```{r fig.height=3}
 merged <- Reduce(merge, seurat.list)
@@ -48,14 +56,14 @@ p1 <- DimPlot(merged, reduction="umap", group.by="Study") + theme(aspect.ratio =
 p2 <- DimPlot(merged, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
 p1 | p2
 
-ggsave("plots/Gerhard_sets_preintegration.pdf", height = 5, width=10)
+ggsave("plots/Gerhard_tumor_preintegration.pdf", height = 5, width=10)
 ```
 
 Find anchors
 ```{r}
-nfeatures=1500
-ndim=30
-stacas_anchors <- FindAnchors.STACAS(seurat.list, 
+nfeatures=1000
+ndim=50
+stacas_anchors <- FindAnchors.STACAS(seurat.list,
                                      anchor.features = nfeatures,
                                      dims = 1:ndim)
 ```
@@ -63,14 +71,14 @@ stacas_anchors <- FindAnchors.STACAS(seurat.list,
 ```{r}
 tree <- SampleTree.STACAS(stacas_anchors,
                           obj.names = names(seurat.list),
-                          hclust.method = "ward.D")
+                          hclust.method = "ward")
 ```
 
 Integrate data
 ```{r}
 object_integrated <- IntegrateData.STACAS(stacas_anchors,
-                                          sample.tree=tree,
-                                              dims=1:ndim)
+                                          sample.tree = tree,
+                                          dims=1:ndim)
 ```
 
 Dimred
@@ -87,24 +95,9 @@ p1 <- DimPlot(object_integrated, reduction="umap", group.by="Study") + theme(asp
 p2 <- DimPlot(object_integrated, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
 p1 | p2
 
-ggsave("plots/Gerhard_sets_STACAS_unsup.pdf", height = 5, width=10)
+ggsave("plots/Gerhard_tumor_STACAS_unsup.pdf", height = 5, width=10)
 ```
 
-Where are specific subtypes, e.g. the "DC5" by Villani et al.?
-```{r fig.height=3}
-p <- list()
-p[[1]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "vi-DC5")) + 
-  theme(aspect.ratio = 1) + NoLegend() + ggtitle("Villani DC5")
-p[[2]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "brS-AS DC")) + 
-  theme(aspect.ratio = 1) +NoLegend() + ggtitle("brS AS-DC")
-p[[3]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "vi-DC6")) +
-  theme(aspect.ratio = 1) + NoLegend() + ggtitle("Villani DC6")
-p[[4]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "zi-tpDC")) +
-  theme(aspect.ratio = 1) + NoLegend() + ggtitle("Zilionis pDCs")
-
-
-wrap_plots(p)
-```
 
 Unsupervised clustering
 ```{r}
