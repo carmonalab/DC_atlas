@@ -53,7 +53,7 @@ ggsave("plots/Gerhard_sets_preintegration.pdf", height = 5, width=10)
 
 Find anchors
 ```{r}
-nfeatures=1500
+nfeatures=1000
 ndim=30
 stacas_anchors <- FindAnchors.STACAS(seurat.list, 
                                      anchor.features = nfeatures,
@@ -142,5 +142,6 @@ FeaturePlot(object_integrated, features=c("CLEC10A","IL1R2","CD1C","CFP"))
 FeaturePlot(object_integrated, features=c("C1QA","C1QB","C1QC","FCGR2A"))
 FeaturePlot(object_integrated, features=c("CD1A","CD207","FCGBP","S100B"))
 FeaturePlot(object_integrated, features=c("S100A8","S100A9","FCN1","CD14"))
+FeaturePlot(object_integrated, features=c("LTB","RUNX3","AXL","IL22RA2"))
 
 ```

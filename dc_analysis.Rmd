@@ -80,11 +80,15 @@ lapply(seurat.list, function(x) {
   head(c)
 })
 
-
 #maybe normalized, but not log-normalized (?)
-hist(seurat.list[[1]]@assays$RNA@counts["CD74",], breaks=50)
-hist(seurat.list[[1]]@assays$RNA@counts["CCR7",], breaks=50)
-hist(seurat.list[[1]]@assays$RNA@counts["XCR1",], breaks=50)
+
+a <- qplot(seurat.list[[1]]@assays$RNA@counts["XCR1",], geom="histogram", bins=30, main="XCR1") + theme_bw()
+b <- qplot(seurat.list[[1]]@assays$RNA@counts["CCR7",], geom="histogram", bins=30, main="CCR7") + theme_bw()
+c <- qplot(seurat.list[[1]]@assays$RNA@counts["CD74",], geom="histogram", bins=30, main="CD74") + theme_bw()
+
+a | b | c
+
+ggsave("plots/raw_data_distribution.pdf", height=4, width=14)
 ```
 
 
@@ -197,6 +201,8 @@ FeaturePlot(dc.seurat[[dset]], features=c("CCR7","LAMP3","FSCN1","BIRC3"))
 #pDC
 FeaturePlot(dc.seurat[[dset]], features=c("IRF7","PLAC8","LILRA4","TCF4"))
 FeaturePlot(dc.seurat[[dset]], features=c("IRF7","GZMB","IL3RA","IRF8"))
+#MonoDC
+FeaturePlot(dc.seurat[[dset]], features=c("S100A9","S100A8","FCN1","VCAN"))
 
 FeaturePlot(dc.seurat[[dset]], features=c("nFeature_RNA","nCount_RNA","percent.ribo","percent.mito"))
 
@@ -207,9 +213,10 @@ Can we build simple signatures based on marker genes?
 sigs <- list()
 
 sigs$cDC1 <- c("CLEC9A","XCR1","BATF3","CADM1")
-sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCER1A")
+sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A")
 sigs$DC3 <- c("LAMP3","CCR7","FSCN1","IL3RA")
 sigs$pDC <- c("IRF7","LILRA4","TCF4")
+sigs$MoDC <- c("S100A9","S100A8","FCN1","VCAN")
 
 dc.seurat <- lapply(dc.seurat, function(x) {
   dc.seurat <- AddModuleScore_UCell(x, features=sigs, name=NULL)
@@ -217,7 +224,7 @@ dc.seurat <- lapply(dc.seurat, function(x) {
 })
 ```
 
-```{r fig.height=3}
+```{r fig.height=4}
 for (s in names(dc.seurat)) {
   p <- FeaturePlot(dc.seurat[[s]], features=paste0(names(sigs),"_kNN"))
   plot(p)
