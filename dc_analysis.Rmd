@@ -54,6 +54,10 @@ for (i in seq_along(studies)) {
   seurat.list[[proj]] <- CreateSeuratObject(counts=data, project=proj, assay="RNA", meta.data = meta)
   seurat.list[[proj]]$Study <- proj
   
+  #make unique names
+  id = paste0("S",i)
+  seurat.list[[proj]] <- RenameCells(seurat.list[[proj]], add.cell.id = id)
+  
   #mito and ribo content
   patterns <- c("^RP[LS]","^MT-")
 
@@ -73,14 +77,13 @@ saveRDS(seurat.list, file=sprintf("%s/Gerhard_metanalysis_seuratlist.rds",pdir))
 
 Data in counts slot appear to be already normalized?
 
-How is that possible, if 10x files were read in?
 ```{r}
 lapply(seurat.list, function(x) {
   c <- colSums(x@assays$RNA@counts)
   head(c)
 })
 
-#maybe normalized, but not log-normalized (?)
+#Normalized, but not log-normalized
 
 a <- qplot(seurat.list[[1]]@assays$RNA@counts["XCR1",], geom="histogram", bins=30, main="XCR1") + theme_bw()
 b <- qplot(seurat.list[[1]]@assays$RNA@counts["CCR7",], geom="histogram", bins=30, main="CCR7") + theme_bw()
@@ -91,7 +94,14 @@ a | b | c
 ggsave("plots/raw_data_distribution.pdf", height=4, width=14)
 ```
 
+Data were normalized using total-count normalization (https://www.sciencedirect.com/science/article/pii/S0092867415005000#app3). We can try to reverse the normalization
 
+But not all datasets contain the original 'nUMI' to allow recovering the original counts.
+```{r}
+M_i = seurat.list$qian$nUMI
+M_ave = mean(M_i)
+counts <- seurat.list$qian@assays$RNA@data * M_i / M_ave
+```
 
 Basic exploration of data
 ```{r}
@@ -102,7 +112,12 @@ for (i in seq_along(seurat.list)) {
   s = names(seurat.list)[i]
   
   obj <- seurat.list[[s]]
-  obj <- NormalizeData(obj) #Counts are not integers...? already normalized?
+
+  #NB: log1p normalization from NormalizeData should reverse the dataset-specific normalization factor
+  obj <- NormalizeData(obj)
+  
+  #Data were already normalized, but not log-transformed. Only apply log.
+#  obj@assays$RNA@data <- log1p(obj@assays$RNA@counts)
   
   obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
   obj <- ScaleData(obj, do.scale = TRUE, do.center = TRUE, verbose = F) 
@@ -162,7 +177,12 @@ plots <- list()
 ndim=15
 for (s in names(dc.seurat)) {
   
+  #NB: log1p normalization from NormalizeData should reverse the dataset-specific normalization factor
   dc.seurat[[s]] <- NormalizeData(dc.seurat[[s]])
+  
+  #Data were already normalized, but not log-transformed. Only apply log.
+#  dc.seurat[[s]]@assays$RNA@data <- log1p(dc.seurat[[s]]@assays$RNA@counts)
+  
   dc.seurat[[s]] <- FindVariableFeatures(dc.seurat[[s]], selection.method = "vst", nfeatures = 500, verbose = FALSE)
   dc.seurat[[s]] <- ScaleData(dc.seurat[[s]], verbose = F) |> RunPCA(npcs = ndim, verbose=F)
   
@@ -237,6 +257,7 @@ ss$cDC1 <- gating_model(name="cDC1", signature = sigs$cDC1)
 ss$cDC2 <- gating_model(name="cDC2", signature = sigs$cDC2)
 ss$DC3 <- gating_model(name="DC3", signature = sigs$DC3)
 ss$pDC <- gating_model(name="pDC", signature = sigs$pDC)
+#ss$MoDC <- gating_model(name="MoDC", signature = sigs$MoDC)  #difficult to find a specific signature for MonoDC
 
 dc.seurat <- lapply(dc.seurat, function(x) {
   scGate(x, model=ss, reduction = "pca", ncores = 4)
@@ -246,8 +267,8 @@ dc.seurat <- lapply(dc.seurat, function(x) {
 
 ```{r fig.height=12, fig.width=4}
 library(RColorBrewer)
-palette <- brewer.pal(n=5, name="Set3")
-names(palette) <- c(names(sigs), "Multi")
+palette <- brewer.pal(n=length(ss)+1, name="Set3")
+names(palette) <- c(names(ss), "Multi")
 
 pll <- list()
 i <- 0

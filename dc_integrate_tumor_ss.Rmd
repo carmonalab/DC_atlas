@@ -39,6 +39,12 @@ Tissue
 ```{r}
 #only tumor samples
 seurat.list <- seurat.list[(c("qian","qianbc","qiancrc","qianlung","qianovarian","maier","zhang","zhangcrc","zilionis"))]
+
+#Multi label as NA
+seurat.list <- lapply(seurat.list, function(x) {
+  x$scGate_multi[x$scGate_multi == "Multi"] <- NA
+  x
+})
 ```
 
 See batch effects
@@ -62,16 +68,27 @@ ggsave("plots/Gerhard_tumor_preintegration.pdf", height = 5, width=10)
 Find anchors
 ```{r}
 nfeatures=1000
-ndim=30
-stacas_anchors <- FindAnchors.STACAS(seurat.list,
+ndim=50
+semisupervised <- FALSE
+
+set.seed=123
+
+if (semisupervised) {
+  stacas_anchors <- FindAnchors.STACAS(seurat.list,
                                      anchor.features = nfeatures,
-                                     dims = 1:ndim)
+                                     dims = 1:ndim,
+                                     cell.labels = "scGate_multi")
+} else {
+  stacas_anchors <- FindAnchors.STACAS(seurat.list,
+                                       anchor.features = nfeatures,
+                                       dims = 1:ndim)
+}
 ```
 
 ```{r}
 tree <- SampleTree.STACAS(stacas_anchors,
                           obj.names = names(seurat.list),
-                          hclust.method = "ward")
+                          hclust.method = "ward.D")
 ```
 
 Integrate data
@@ -88,14 +105,14 @@ object_integrated <- object_integrated %>% ScaleData() %>% RunPCA(npcs=ndim) %>%
 
 ```{r fig.height=3}
 library(RColorBrewer)
-palette <- brewer.pal(n=5, name="Set3")
-names(palette) <- c("cDC1","cDC2","DC3","pDC","Multi")
+palette <- brewer.pal(n=4, name="Set3")
+names(palette) <- c("cDC1","cDC2","DC3","pDC")
 
 p1 <- DimPlot(object_integrated, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(object_integrated, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
 p1 | p2
 
-ggsave("plots/Gerhard_tumor_STACAS_unsup.pdf", height = 5, width=10)
+ggsave("plots/Gerhard_tumor_STACAS_semisup.pdf", height = 5, width=10)
 ```
 
 
@@ -135,5 +152,5 @@ FeaturePlot(object_integrated, features=c("CLEC10A","IL1R2","CD1C","CFP"))
 FeaturePlot(object_integrated, features=c("C1QA","C1QB","C1QC","FCGR2A"))
 FeaturePlot(object_integrated, features=c("CD1A","CD207","FCGBP","S100B"))
 FeaturePlot(object_integrated, features=c("S100A8","S100A9","FCN1","CD14"))
-
+FeaturePlot(object_integrated, features=c("SIGLEC6","AXL","SIGLEC1","SIGLEC2"))
 ```

@@ -38,11 +38,15 @@ See batch effects
 merged <- Reduce(merge, seurat.list)
 
 merged <- FindVariableFeatures(merged, nfeatures = 1000)
-merged <- merged %>% ScaleData() %>% RunPCA(npcs=20) %>% RunUMAP(dims=1:20)
+merged <- merged %>% ScaleData() %>% RunPCA(npcs=30) %>% RunUMAP(dims=1:30)
 
 library(RColorBrewer)
 palette <- brewer.pal(n=5, name="Set3")
 names(palette) <- c("cDC1","cDC2","DC3","pDC","Multi")
+
+#palette <- brewer.pal(n=6, name="Set3")
+#names(palette) <- c("cDC1","cDC2","DC3","pDC","MoDC","Multi")
+
 
 p1 <- DimPlot(merged, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(merged, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
@@ -55,6 +59,7 @@ Find anchors
 ```{r}
 nfeatures=1000
 ndim=30
+set.seed(1234)
 stacas_anchors <- FindAnchors.STACAS(seurat.list, 
                                      anchor.features = nfeatures,
                                      dims = 1:ndim)
@@ -82,6 +87,10 @@ object_integrated <- object_integrated %>% ScaleData() %>% RunPCA(npcs=ndim) %>%
 library(RColorBrewer)
 palette <- brewer.pal(n=5, name="Set3")
 names(palette) <- c("cDC1","cDC2","DC3","pDC","Multi")
+
+#palette <- brewer.pal(n=6, name="Set3")
+#names(palette) <- c("cDC1","cDC2","DC3","pDC","MoDC","Multi")
+
 
 p1 <- DimPlot(object_integrated, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(object_integrated, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
