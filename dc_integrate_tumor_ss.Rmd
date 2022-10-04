@@ -68,7 +68,7 @@ ggsave("plots/Gerhard_tumor_preintegration.pdf", height = 5, width=10)
 Find anchors
 ```{r}
 nfeatures=1000
-ndim=50
+ndim=30
 semisupervised <- FALSE
 
 set.seed=123
@@ -152,5 +152,5 @@ FeaturePlot(object_integrated, features=c("CLEC10A","IL1R2","CD1C","CFP"))
 FeaturePlot(object_integrated, features=c("C1QA","C1QB","C1QC","FCGR2A"))
 FeaturePlot(object_integrated, features=c("CD1A","CD207","FCGBP","S100B"))
 FeaturePlot(object_integrated, features=c("S100A8","S100A9","FCN1","CD14"))
-FeaturePlot(object_integrated, features=c("SIGLEC6","AXL","SIGLEC1","SIGLEC2"))
+FeaturePlot(object_integrated, features=c("SIGLEC6","AXL","SIGLEC1"))
 ```

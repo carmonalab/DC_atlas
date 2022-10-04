@@ -24,6 +24,13 @@ library(UCell)
 library(scGate)
 ```
 
+Standardize gene symbols in expression matrix
+```{r}
+geneRef_file <- "aux/EnsemblGenes105_Hsa_GRCh38.p13.txt.gz"
+
+geneRef <- data.table::fread(geneRef_file)
+```
+
 #NB: for conversion between Scanpy format to matrix files, see export_data.py script
 
 Read in data for individual studies
@@ -50,13 +57,18 @@ for (i in seq_along(studies)) {
   rownames(meta) <- cell.names
   rownames(data) <- gene.names
   colnames(data) <- cell.names 
-   
+
+  #make Seurat object
   seurat.list[[proj]] <- CreateSeuratObject(counts=data, project=proj, assay="RNA", meta.data = meta)
   seurat.list[[proj]]$Study <- proj
   
   #make unique names
   id = paste0("S",i)
   seurat.list[[proj]] <- RenameCells(seurat.list[[proj]], add.cell.id = id)
+  
+  #standardize gene names
+  seurat.list[[proj]] <- STACAS:::standardizeGeneSymbols(seurat.list[[proj]],
+                                                         EnsemblGeneTable=geneRef)
   
   #mito and ribo content
   patterns <- c("^RP[LS]","^MT-")

@@ -12,6 +12,7 @@ Libraries
 ```{r}
 #remotes::install_github('carmonalab/UCell')
 #remotes::install_github('carmonalab/STACAS')
+#remotes::install_github('carmonalab/ProjecTILs')
 
 library(ggplot2)
 library(Seurat)
@@ -31,6 +32,12 @@ Read in data as Seurat objects (see dc_analysis.Rmd for data conversion)
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
 seurat.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
+
+#Exclude Brown dataset
+seurat.list <- seurat.list[names(seurat.list) != "brownSpleen"]
+
+#only tumor samples
+#seurat.list <- seurat.list[(c("qian","qianbc","qiancrc","qianlung","qianovarian","maier","zhang","zhangcrc","zilionis"))]
 ```
 
 See batch effects
@@ -57,8 +64,8 @@ ggsave("plots/Gerhard_sets_preintegration.pdf", height = 5, width=10)
 
 Find anchors
 ```{r}
-nfeatures=1000
-ndim=30
+nfeatures=2000
+ndim=40
 set.seed(1234)
 stacas_anchors <- FindAnchors.STACAS(seurat.list, 
                                      anchor.features = nfeatures,
@@ -80,6 +87,7 @@ object_integrated <- IntegrateData.STACAS(stacas_anchors,
 
 Dimred
 ```{r}
+VariableFeatures(object_integrated) <- stacas_anchors@anchor.features 
 object_integrated <- object_integrated %>% ScaleData() %>% RunPCA(npcs=ndim) %>% RunUMAP(dims=1:ndim)
 ```
 
@@ -99,29 +107,14 @@ p1 | p2
 ggsave("plots/Gerhard_sets_STACAS_unsup.pdf", height = 5, width=10)
 ```
 
-Where are specific subtypes, e.g. the "DC5" by Villani et al.?
-```{r fig.height=3}
-p <- list()
-p[[1]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "vi-DC5")) + 
-  theme(aspect.ratio = 1) + NoLegend() + ggtitle("Villani DC5")
-p[[2]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "brS-AS DC")) + 
-  theme(aspect.ratio = 1) +NoLegend() + ggtitle("brS AS-DC")
-p[[3]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "vi-DC6")) +
-  theme(aspect.ratio = 1) + NoLegend() + ggtitle("Villani DC6")
-p[[4]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == "zi-tpDC")) +
-  theme(aspect.ratio = 1) + NoLegend() + ggtitle("Zilionis pDCs")
-
-
-wrap_plots(p)
-```
 
 Unsupervised clustering
 ```{r}
 k.param <- 20
-res <- 0.3
+res <- 0.2
 
-object_integrated <- FindNeighbors(object_integrated, k.param=k.param)
-object_integrated <- FindClusters(object_integrated, resolution = res)
+object_integrated <- FindNeighbors(object_integrated, k.param=k.param, dims=1:ndim)
+object_integrated <- FindClusters(object_integrated, resolution = res, graph.name = "integrated_snn")
 
 DimPlot(object_integrated, reduction = "umap", group.by="seurat_clusters") + theme(aspect.ratio = 1)
 ```
@@ -144,6 +137,19 @@ DefaultAssay(object_integrated) <- "integrated"
 
 ```
 
+Where are specific subtypes, e.g. the "DC5" by Villani et al.?
+```{r fig.height=8, fig.align=14}
+p <- list()
+anns <- unique(object_integrated$state)
+
+for (a in anns) {
+p[[a]] <- DimPlot(object_integrated, reduction = "umap", cells.highlight = which(object_integrated$state == a)) + 
+  theme(aspect.ratio = 1) + NoLegend() + ggtitle(a)
+}
+
+wrap_plots(p)
+```
+
 ```{r fig.height=3}
 DefaultAssay(object_integrated) <- "RNA"
 
@@ -151,6 +157,35 @@ FeaturePlot(object_integrated, features=c("CLEC10A","IL1R2","CD1C","CFP"))
 FeaturePlot(object_integrated, features=c("C1QA","C1QB","C1QC","FCGR2A"))
 FeaturePlot(object_integrated, features=c("CD1A","CD207","FCGBP","S100B"))
 FeaturePlot(object_integrated, features=c("S100A8","S100A9","FCN1","CD14"))
-FeaturePlot(object_integrated, features=c("LTB","RUNX3","AXL","IL22RA2"))
+FeaturePlot(object_integrated, features=c("S100B","ACY3","PRDM16","CD14"))
+FeaturePlot(object_integrated, features=c("LTB","RUNX3","LTB","IL22RA2"))
+FeaturePlot(object_integrated, features=c("PPP1R14A","DAB2","AXL","LILRA4"))
+FeaturePlot(object_integrated, features=c("TRAC","CD2","CD3E","CD3D"))
+```
+
+Try to name clusters
+```{r}
+object_integrated$annotation <- NA
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("0")] <- "cDC2_CLEC10A"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("1","9")] <- "cDC1"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("2")] <- "DC3"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("3","7","10")] <- "cDC2_CD1A"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("4")] <- "MonoDC"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("5")] <- "pDC"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("6")] <- "Tcell_doublets"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("8")] <- "AS-DC"
+
+DimPlot(object_integrated, group.by = "annotation")
+```
+
+Make it into reference map
+```{r}
+library(ProjecTILs)
+
+VariableFeatures(object_integrated) <- 
+ref <- make.reference(object_integrated, assay = "integrated", recalculate.umap = TRUE,
+                      annotation.column = "annotation", ndim = 40)
 
 ```
+
+
