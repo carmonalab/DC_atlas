@@ -87,7 +87,7 @@ object_integrated <- IntegrateData.STACAS(stacas_anchors,
 
 Dimred
 ```{r}
-VariableFeatures(object_integrated) <- stacas_anchors@anchor.features 
+set.seed(123)
 object_integrated <- object_integrated %>% ScaleData() %>% RunPCA(npcs=ndim) %>% RunUMAP(dims=1:ndim)
 ```
 
@@ -112,6 +112,7 @@ Unsupervised clustering
 ```{r}
 k.param <- 20
 res <- 0.2
+set.seed(123)
 
 object_integrated <- FindNeighbors(object_integrated, k.param=k.param, dims=1:ndim)
 object_integrated <- FindClusters(object_integrated, resolution = res, graph.name = "integrated_snn")
@@ -138,7 +139,7 @@ DefaultAssay(object_integrated) <- "integrated"
 ```
 
 Where are specific subtypes, e.g. the "DC5" by Villani et al.?
-```{r fig.height=8, fig.align=14}
+```{r fig.height=10, fig.align=16}
 p <- list()
 anns <- unique(object_integrated$state)
 
@@ -161,6 +162,8 @@ FeaturePlot(object_integrated, features=c("S100B","ACY3","PRDM16","CD14"))
 FeaturePlot(object_integrated, features=c("LTB","RUNX3","LTB","IL22RA2"))
 FeaturePlot(object_integrated, features=c("PPP1R14A","DAB2","AXL","LILRA4"))
 FeaturePlot(object_integrated, features=c("TRAC","CD2","CD3E","CD3D"))
+FeaturePlot(object_integrated, features=c("TOP2A","STMN1","MKI67","CD3D"))
+
 ```
 
 Try to name clusters
@@ -181,11 +184,249 @@ DimPlot(object_integrated, group.by = "annotation")
 Make it into reference map
 ```{r}
 library(ProjecTILs)
-
-VariableFeatures(object_integrated) <- 
-ref <- make.reference(object_integrated, assay = "integrated", recalculate.umap = TRUE,
+DefaultAssay(object_integrated) <- 'integrated'
+ref <- make.reference(object_integrated, recalculate.umap = TRUE,
                       annotation.column = "annotation", ndim = 40)
 
 ```
 
+
+```{r}
+DimPlot(ref, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
+ggsave("plots/DC_reference_wTcells.pdf", height=5, width=7)
+```
+
+```{r}
+p1 <- DimPlot(ref, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
+p2 <- DimPlot(ref, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
+p1 | p2
+
+ggsave("plots/DC_reference_bysample.pdf", height = 5, width=10)
+```
+
+Try dataset projection
+```{r}
+pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
+
+dataset.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
+
+brown <- dataset.list$brownSpleen
+
+DimPlot(brown, group.by = "state")
+DimPlot(brown, group.by = "scGate_multi")
+```
+
+```{r}
+brown.projected <- Run.ProjecTILs(brown, ref=ref, filter.cells = FALSE)
+```
+
+See results
+```{r}
+plot.projection(ref, brown.projected)
+```
+
+```{r fig.height=3, fig.width=8}
+celltypes <- unique(brown.projected$state)
+pll <- list()
+
+for (c in celltypes) {
+  sub <- subset(brown.projected, subset=state==c)
+  pll[[c]] <- plot.projection(ref, query=sub, linesize = 0.5, pointsize = 0.5) + ggtitle(c)
+}
+
+wrap_plots(pll, ncol=4)
+
+ggsave("plots/Brown_projected_bysubtype.png", height=9, width=22)
+```
+
+Composition
+```{r}
+plot.statepred.composition(ref=ref, query=brown.projected)
+```
+
+Profile agreement
+```{r fig.height=4}
+genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
+                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
+                 "GZMB","LILRA4","TCF4","PPP1R14A","AXL")
+
+plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar)
+```
+
+Where are specific subtypes, e.g. the "DC5" by Villani et al.?
+```{r fig.height=9, fig.align=12}
+p <- list()
+anns <- unique(ref$state)
+
+for (a in anns) {
+p[[a]] <- DimPlot(ref, reduction = "umap", cells.highlight = which(ref$state == a)) + 
+  theme(aspect.ratio = 1,
+        axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank()) +
+  NoLegend() + ggtitle(a)
+}
+
+wrap_plots(p)
+ggsave("plots/DC_reference_byorig_annot.png", height=18, width=24)
+```
+
+
+```{r fig.height=4, fig.align=9, eval=F}
+studies <- unique(ref$Study)
+for (s in studies) {
+  p <- list()
+  this <- subset(ref, subset=Study==s)
+  anns <- unique(this$state)
+  for (a in anns) {
+    p[[a]] <- DimPlot(ref, reduction = "umap", cells.highlight = which(ref$state == a)) + 
+      theme(aspect.ratio = 1) + NoLegend() + ggtitle(a)
+  }
+  
+  wrap <- wrap_plots(p)
+  plot(wrap)
+  ggsave(sprintf("plots/DC_reference_byorig_annot_split_%s.png",s), plot=wrap, height=5, width=13)
+}
+```
+
+Find markers for subtypes in the reference
+```{r}
+Idents(ref) <- "functional.cluster"
+DefaultAssay(ref) <- "RNA"
+
+set.seed(1234)
+cluster.markers <- FindAllMarkers(ref, only.pos = T, min.pct = 0.1, min.diff.pct=0.1, 
+                                  logfc.threshold = 0.25, max.cells.per.ident = 500, test.use="wilcox",base=exp(1))
+
+all <- cluster.markers |> dplyr::group_by(cluster) |> dplyr::top_n(n = 50, wt = abs(avg_logFC))
+
+for (i in levels(ref@active.ident)) {
+    print(subset(all, cluster==i))
+}  
+DefaultAssay(ref) <- "integrated"
+
+```
+
+Make a heatmap of DEGs
+```{r fig.height=4}
+ref.copy <- ref
+DefaultAssay(ref.copy) <- 'RNA'
+ref.copy <- ScaleData(ref.copy)
+
+genes.use <- c()
+for (i in levels(ref.copy$functional.cluster)) {
+    this <- as.vector(all[all$cluster==i, "gene"])[[1]]
+    this <- this[1:min(8, length(this))]
+    
+    genes.use <- c(genes.use, this)
+}
+
+heat <- DoHeatmap(ref.copy, assay="RNA", features=genes.use, group.by = "functional.cluster")
+
+heat + scale_fill_gradientn(colors = c("blue", "white", "red"))
+ggsave("plots/DC_scHeatmap_topDEG.png", height=11, width=21)
+```
+
+
+```{r fig.height=3}
+DefaultAssay(ref.copy) <- "RNA"
+
+data("genes.blocklist")
+c1 <- genes.blocklist$Hs$cellCycle.G1S
+c2 <- genes.blocklist$Hs$cellCycle.G2M
+signatures <- list("Tcell"=c("CD2","CD3D","CD3E","CD3G","TRAC"), "cycling"=c(c1,c2))
+ref.copy <- AddModuleScore_UCell(ref.copy, features=signatures, name = NULL)
+ref.copy <- SmoothKNN(ref.copy, signature.names = c("Tcell","cycling"))
+FeaturePlot(ref.copy, features=c("TRAC","CD3D","Tcell_kNN","MKI67","STMN1","cycling_kNN"), ncol=3)
+ggsave("plots/DC_ref_Tcell_and_cycling.png", height=6, width=11)
+
+DefaultAssay(ref.copy) <- "integrated"
+```
+
+
+```{r fig.height=3}
+FeaturePlot(ref.copy, features=c("AXL","SIGLEC6","SIGLEC1"), order=T)
+```
+
+
+# Simplify reference using SuperCell
+```{r}
+remotes::install_github("GfellerLab/SuperCell")
+library(SuperCell)
+
+gamma <- 20 # Graining level
+npcs <- 40 
+
+DefaultAssay(ref.copy) <- "integrated"
+# Compute metacells using SuperCell package
+MC <- SCimplify(
+  X = GetAssayData(ref.copy), # single-cell log-normalized gene expression data
+  genes.use = VariableFeatures(ref.copy), 
+  gamma = gamma,
+  n.pc = npcs
+)
+
+MC.ge <- supercell_GE(
+  ge = GetAssayData(ref.copy),
+  groups = MC$membership
+)
+
+MC.ge.RNA <- supercell_GE(
+  ge = GetAssayData(ref.copy, assay="RNA"),
+  groups = MC$membership
+)
+
+
+# Annotate metacells to functional cluster
+MC$functional.cluster <- supercell_assign(
+  cluster = ref.copy$functional.cluster,          # single-cell assignment to cell lines 
+  supercell_membership = MC$membership,  # single-cell assignment to metacells
+  method = "absolute" # available methods are c("jaccard", "relative", "absolute"), function's help() for explanation
+)
+
+# Compute purity of metacells
+MC$purity <- supercell_purity(
+  clusters = ref.copy$functional.cluster,
+  supercell_membership = MC$membership, 
+  method = "max_proportion"
+)
+
+# Metacell purity distribution
+hist(MC$purity)
+
+supercell_plot(
+  MC$graph.supercells, 
+  group = MC$functional.cluster, 
+  seed = 1, 
+  alpha = -pi/2,
+  main  = "Metacells colored by subtype"
+)
+
+#Make a Seurat object
+ref.coarse <- supercell_2_Seurat(
+  SC.GE = MC.ge, 
+  SC = MC, 
+  fields = c("functional.cluster", "purity"),
+  var.genes = MC$genes.use,
+  N.comp = npcs
+)
+
+colnames(MC.ge.RNA) <- colnames(ref.coarse@assays$RNA@data)
+ref.coarse[["uncorrected"]] <- CreateAssayObject(data = MC.ge.RNA)
+ref.coarse <- ScaleData(ref.coarse, assay="uncorrected")
+
+Idents(ref.coarse) <- "functional.cluster"
+
+ref.coarse <- RunUMAP(ref.coarse, dims = 1:npcs)
+DimPlot(ref.coarse)
+
+```
+Heatmap of gene expression based on MetaCells
+```{r}
+heat2 <- DoHeatmap(ref.coarse, assay="uncorrected", features=genes.use, group.by = "functional.cluster")
+
+heat2 + scale_fill_gradientn(colors = c("blue", "white", "red"))
+
+ggsave("plots/DC_scHeatmap_topDEG.metacells.png", height=11, width=16)
+```
 

@@ -205,9 +205,11 @@ for (s in names(dc.seurat)) {
 ```
 
 ```{r fig.height=8, fig.width=16}
+plots <- plots[names(plots) != "brownSpleen"]
+
 wrap_plots(plots, ncol=4)
 
-ggsave("plots/Gerhard_sets_unsup_DC.pdf", width = 24, height=15)
+ggsave("plots/Gerhard_sets_unsup_DC.pdf", width = 16, height=12)
 ```
 
 
@@ -245,7 +247,8 @@ Can we build simple signatures based on marker genes?
 sigs <- list()
 
 sigs$cDC1 <- c("CLEC9A","XCR1","BATF3","CADM1")
-sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A")
+#sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A")
+sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A","S100A9-","S100A8-","FCN1-")
 sigs$DC3 <- c("LAMP3","CCR7","FSCN1","IL3RA")
 sigs$pDC <- c("IRF7","LILRA4","TCF4")
 sigs$MoDC <- c("S100A9","S100A8","FCN1","VCAN")
@@ -269,7 +272,8 @@ ss$cDC1 <- gating_model(name="cDC1", signature = sigs$cDC1)
 ss$cDC2 <- gating_model(name="cDC2", signature = sigs$cDC2)
 ss$DC3 <- gating_model(name="DC3", signature = sigs$DC3)
 ss$pDC <- gating_model(name="pDC", signature = sigs$pDC)
-#ss$MoDC <- gating_model(name="MoDC", signature = sigs$MoDC)  #difficult to find a specific signature for MonoDC
+
+ss$MoDC <- gating_model(name="MoDC", signature = sigs$MoDC)  #may be difficult to find a specific signature for MonoDC
 
 dc.seurat <- lapply(dc.seurat, function(x) {
   scGate(x, model=ss, reduction = "pca", ncores = 4)
