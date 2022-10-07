@@ -192,7 +192,14 @@ ref <- make.reference(object_integrated, recalculate.umap = TRUE,
 
 
 ```{r}
-DimPlot(ref, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
+states <- levels(ref$functional.cluster)
+palette <- c("#edbe2a", "#A58AFF", "#53B400", "#F8766D", 
+                "#00B6EB", "#d1cfcc", "#FF0000", "#87f6a5", "#e812dd")
+
+palette <- palette[1:length(states)]
+names(palette) <- states
+
+DimPlot(ref, group.by = "functional.cluster", label = TRUE, cols = palette) + theme(aspect.ratio = 1)
 ggsave("plots/DC_reference_wTcells.pdf", height=5, width=7)
 ```
 
@@ -348,6 +355,115 @@ DefaultAssay(ref.copy) <- "integrated"
 FeaturePlot(ref.copy, features=c("AXL","SIGLEC6","SIGLEC1"), order=T)
 ```
 
+Subset composition
+```{r}
+tab <- table(ref$Study, ref$functional.cluster)
+tab.norm <- tab/rowSums(tab)
+
+df <- reshape2::melt(tab.norm)
+colnames(df) <- c("Study","Subtype","Frequency")
+
+
+palette <- c("#edbe2a", "#A58AFF", "#53B400", "#F8766D", 
+                "#00B6EB", "#d1cfcc", "#FF0000", "#87f6a5", "#e812dd")
+
+palette <- palette[1:ncol(tab)]
+
+ggplot(df, aes(x = Study, y = Frequency, 
+            fill = Subtype)) + geom_bar(stat = "identity") + 
+            theme_bw() + scale_fill_manual(values = palette) +
+            theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+ggsave("plots/DC_composition_by_dataset.pdf", height=4, width=5)
+```
+
+Make a subset vs. study heatmap of pseudobulk profiles
+```{r}
+make.heatmap <- function(data, assay="RNA", genes, scale="row",
+                         method=c("ward.D", "average"), brewer.palette="RdBu",
+                         cluster.col = "functional.cluster", flip=FALSE,
+                         cluster_genes = FALSE, cluster_samples=FALSE, min.cells = 10,
+                         palette = NULL) {
+  
+  require(pheatmap)
+  set.seed(123)
+  
+  method = method[1]
+  
+  data$Study_Subset <- factor(paste(data@meta.data[,cluster.col],data$Study,sep="."))
+  
+  t <- table(data$Study_Subset)
+  accept <- names(t)[t>min.cells]
+  
+  data <- subset(data, subset=Study_Subset %in% accept)
+   
+  #Calculate mean expression by cluster
+  m <- c()
+  for( g in unique(genes)){
+    m[[g]] <- tapply(data@assays[[assay]][g,],data$Study_Subset, mean)
+  }
+  m <- as.data.frame(m)
+  
+  m <- m[accept,]
+  
+  m.study <- factor(unlist(lapply(strsplit(rownames(m),"\\.",perl = T),function(x) x[[2]])))
+  m.subset <- factor(unlist(lapply(strsplit(rownames(m),"\\.",perl = T),function(x) x[[1]])))
+
+  #gaps_col <- (which(!duplicated(m.subset))-1)[-1]
+  
+  breaksList = seq(-2, 2, by = 0.1)
+  
+  require(RColorBrewer)
+  color = colorRampPalette(rev(brewer.pal(n = 7, name = brewer.palette)))(length(breaksList))
+  
+  if (is.null(palette)) {
+    palette = brewer.pal(n=length(unique(m.subset)), name="Paired")
+    names(palette) <- unique(m.subset)
+  }
+  
+  annotation_col = data.frame(
+                    Subtype = m.subset,
+                    Study = m.study
+                )
+  rownames(annotation_col) = rownames(m)
+
+
+  if (flip) { 
+    h <- pheatmap::pheatmap(m, cluster_rows = cluster_samples,
+                            cluster_cols = cluster_genes,scale = scale,
+                            breaks = breaksList, color=color, 
+                            annotation_row = annotation_col, 
+                            show_rownames = F,
+                            border_color = NA,
+                            annotation_colors = list(Subtype=palette), 
+                            fontsize_row=6,fontsize = 7, 
+                            clustering_method=method)
+  } else {
+    h <- pheatmap::pheatmap(t(m),cluster_rows = cluster_genes,
+                            cluster_cols = cluster_samples,scale = scale,
+                            breaks = breaksList, color=color, 
+                            annotation_col = annotation_col, 
+                            show_colnames = F,
+                            border_color = NA,
+                            annotation_colors = list(Subtype=palette), 
+                            fontsize_row=6,fontsize = 7, 
+                            clustering_method=method)
+  }
+  return(h)
+}
+```
+
+Plot heatmap of pseudo-bulk by subtype/study
+```{r}
+library(pheatmap)
+h <- make.heatmap(ref.copy, assay = "RNA", genes = genes.use, min.cells=20,
+            palette=palette, cluster_genes = FALSE, cluster_samples = FALSE)
+
+ggsave("plots/DC_heatmap_pseudobulk_unclustered.pdf", plot=h, height=6, width=9)
+
+h <- make.heatmap(ref.copy, assay = "RNA", genes = genes.use, min.cells=20,
+            palette=palette, cluster_genes = TRUE, cluster_samples = TRUE)
+ggsave("plots/DC_heatmap_pseudobulk_clustered.pdf", plot=h, height=7, width=10)
+```
 
 # Simplify reference using SuperCell
 ```{r}
