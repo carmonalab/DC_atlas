@@ -1,0 +1,142 @@
+---
+title: "Integrate DC datasets - exclude T cell doublets"
+author: "Massimo Andreatta & Santiago Carmona"
+#output: html_notebook
+---
+
+```{r}
+renv::restore()
+```
+
+Libraries
+```{r}
+#remotes::install_github('carmonalab/UCell')
+#remotes::install_github('carmonalab/STACAS')
+#remotes::install_github('carmonalab/ProjecTILs')
+
+library(ggplot2)
+library(Seurat)
+library(tidyr)
+library(SeuratObject)
+library(Matrix)
+library(patchwork)
+library(remotes)
+library(UCell)
+library(STACAS)
+```
+
+Read in pre-integrated object (see dc_integrate.Rmd)
+```{r}
+ref.init <- readRDS("aux/DC_reference_wTcells.rds")
+
+DimPlot(ref.init, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
+```
+
+Remove T cell doublets
+```{r}
+ref.init <- subset(ref.init, subset=functional.cluster != "Tcell_doublets")
+ref.init$pre.label <- ref.init$functional.cluster
+table(ref.init$pre.label)
+```
+
+Re-integrate using the semi-supervised assignement
+
+Find anchors, guided by initial functional.cluster assignment
+```{r}
+DefaultAssay(ref.init) <- "RNA"
+seurat.list <- SplitObject(ref.init, split.by = "Study")
+
+nfeatures=2000
+ndim=40
+semi_supervised=TRUE  #whether to use labels to guide integration
+
+if (semi_supervised) {
+  ll <- "pre.label"
+} else {
+  ll <- NULL
+}
+
+set.seed(1234)
+stacas_anchors <- FindAnchors.STACAS(seurat.list, 
+                                     anchor.features = nfeatures,
+                                     dims = 1:ndim,
+                                     cell.labels = ll) 
+
+tree <- SampleTree.STACAS(stacas_anchors,
+                          obj.names = names(seurat.list),
+                          hclust.method = "ward.D")
+```
+
+Integrate data
+```{r}
+object_integrated <- IntegrateData.STACAS(stacas_anchors,
+                                          sample.tree=tree,
+                                              dims=1:ndim)
+```
+
+Dimred
+```{r}
+set.seed(123)
+object_integrated <- object_integrated %>% ScaleData() %>% RunPCA(npcs=ndim) %>% RunUMAP(dims=1:ndim)
+```
+
+
+```{r fig.height=5}
+library(RColorBrewer)
+palette <- brewer.pal(n=5, name="Set3")
+names(palette) <- c("cDC1","cDC2","DC3","pDC","Multi")
+
+#palette <- brewer.pal(n=6, name="Set3")
+#names(palette) <- c("cDC1","cDC2","DC3","pDC","MoDC","Multi")
+
+
+p1 <- DimPlot(object_integrated, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
+p2 <- DimPlot(object_integrated, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
+p3 <- DimPlot(object_integrated, reduction="umap", group.by="pre.label") + theme(aspect.ratio = 1)
+
+(p1 | p2) / p3
+```
+
+Make it into reference map
+```{r}
+library(ProjecTILs)
+DefaultAssay(object_integrated) <- 'integrated'
+ref <- make.reference(object_integrated, recalculate.umap = TRUE,
+                      annotation.column = "annotation", ndim = 40)
+
+```
+
+```{r}
+DimPlot(ref, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
+ggsave("plots/DC_reference.pdf", height=5, width=7)
+```
+
+# Try dataset projection
+```{r}
+pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
+
+dataset.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
+
+brown <- dataset.list$brownSpleen
+
+DimPlot(brown, group.by = "state")
+DimPlot(brown, group.by = "scGate_multi")
+```
+
+```{r}
+brown.projected <- Run.ProjecTILs(brown, ref=ref, filter.cells = FALSE)
+```
+
+
+
+```{r fig.height=3, fig.width=8}
+celltypes <- unique(brown.projected$state)
+pll <- list()
+
+for (c in celltypes) {
+  sub <- subset(brown.projected, subset=state==c)
+  pll[[c]] <- plot.projection(ref, query=sub, linesize = 0.5, pointsize = 0.5) + ggtitle(c)
+}
+
+wrap_plots(pll, ncol=4)
+```

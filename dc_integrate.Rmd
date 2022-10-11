@@ -203,15 +203,18 @@ DimPlot(ref, group.by = "functional.cluster", label = TRUE, cols = palette) + th
 ggsave("plots/DC_reference_wTcells.pdf", height=5, width=7)
 ```
 
-```{r}
+```{r fig.height=3}
 p1 <- DimPlot(ref, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(ref, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
 p1 | p2
 
 ggsave("plots/DC_reference_bysample.pdf", height = 5, width=10)
+
+#Save object
+saveRDS(ref, "aux/DC_reference_wTcells.rds")
 ```
 
-Try dataset projection
+# Try dataset projection
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
