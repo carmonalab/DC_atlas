@@ -1,0 +1,167 @@
+---
+title: "Develop scGate gating models for DCs"
+author: "Massimo Andreatta & Santiago Carmona"
+#output: html_notebook
+---
+
+```{r}
+renv::restore()
+```
+
+Libraries
+```{r}
+#remotes::install_github('carmonalab/UCell')
+#remotes::install_github('carmonalab/scGate', ref='dev')
+
+library(ggplot2)
+library(Seurat)
+library(tidyr)
+library(SeuratObject)
+library(Matrix)
+library(patchwork)
+library(remotes)
+library(UCell)
+library(scGate)
+```
+
+
+# Read in data
+Prepared using `dc_analysis.Rmd` script
+
+```{r}
+pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
+seurat.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.rds",pdir))
+```
+
+Basic exploration of data
+```{r fig.height=8, fig.width=16}
+plots <- list()
+
+ndim=30
+for (i in seq_along(seurat.list)) {
+  s = names(seurat.list)[i]
+  
+  obj <- seurat.list[[s]]
+
+  #NB: log1p normalization from NormalizeData should reverse the dataset-specific normalization factor
+  obj <- NormalizeData(obj)
+  
+  obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+  obj <- ScaleData(obj, do.scale = TRUE, do.center = TRUE, verbose = F) 
+  obj <- RunPCA(object = obj, features = obj@assays$RNA@var.features, npcs = ndim, verbose = F)
+  
+  obj <- RunUMAP(obj, reduction = "pca", dims = 1:ndim, seed.use=123, verbose = F)
+  plots[[s]] <- DimPlot(obj, reduction = "umap", group.by = "state", label = T) + ggtitle(s) + NoLegend() +
+             theme(axis.title=element_blank(),axis.text=element_blank(),axis.ticks=element_blank())
+  
+  seurat.list[[s]] <- obj
+}
+
+wrap_plots(plots, ncol=4)
+```
+
+To simplify, highlight DCs vs non-DCs
+```{r}
+seurat.list$villani$DC.class <- "notDC"
+seurat.list$villani$DC.class[seurat.list$villani$state %in% c("vi-DC1","vi-DC5","vi-DC6")] <- 'DC'
+seurat.list$villani$DC.class[seurat.list$villani$state %in% c("vi-DC2","vi-DC3","vi-DC4")] <- 'MonoDC'
+
+seurat.list$zhang$DC.class <- "notDC"
+seurat.list$zhang$DC.class[seurat.list$zhang$state %in% c("zhH-DC-C1-CD1C",
+                                                          "zhH-DC-C2-FCER1A",
+                                                          "zhH-DC-C3-CLEC9A",
+                                                          "zhH-DC-C4-LAMP3")] <- 'DC'
+
+seurat.list$zhangcrc$DC.class <- "notDC"
+seurat.list$zhangcrc$DC.class[seurat.list$zhangcrc$state %in% c("zhC-hM03_cDC2-CD1C",
+                                                                     "zhC-hM04_cDC1-BATF3",
+                                                                     "zhC-hM02_pDC-LILRA4")] <- 'DC'
+
+
+seurat.list$zilionis$DC.class <- "notDC"
+seurat.list$zilionis$DC.class[seurat.list$zilionis$state %in% c("zi-tDC1",
+                                                                "zi-tDC2",
+                                                                "zi-tDC3",
+                                                                "zi-tpDC",
+                                                                "zi-bpDC")] <- 'DC'
+seurat.list$zilionis$DC.class[seurat.list$zilionis$state %in% c("bMonoDC","tMonoDC")] <- 'MonoDC'
+                              
+
+seurat.list$brownSpleen$DC.class <- "DC"
+
+seurat.list$maier$DC.class <- "DC"
+
+seurat.list$martin$DC.class <- "DC"
+seurat.list$martin$DC.class[seurat.list$martin$state == "mi-moDC"] <- "MonoDC"
+
+seurat.list$qian$DC.class <- "DC"
+seurat.list$qianbc$DC.class <- "DC"
+seurat.list$qiancrc$DC.class <- "DC"
+seurat.list$qianlung$DC.class <- "DC"
+seurat.list$qianovarian$DC.class <- "DC"
+```
+
+
+```{r fig.height=6, fig.width=12}
+ppp <- list()
+for (i in seq_along(seurat.list)) {
+  s = names(seurat.list)[i]
+  
+  ppp[[s]] <- DimPlot(seurat.list[[s]], reduction = "umap", group.by = "DC.class", label = T) + ggtitle(s) + NoLegend() +
+             theme(axis.title=element_blank(),axis.text=element_blank(),axis.ticks=element_blank())
+}
+
+wrap_plots(ppp, ncol=4)
+```
+
+In particular, Zilionis and Zhang data sets contain MoMac besides DCs, and Villani contains some monocytes - can we tell them apart?
+```{r fig.height=7, fig.width=7}
+wrap_plots(ppp[c("zilionis","zhang","zhangcrc","villani")], ncol=2)
+```
+
+Set up scGate models (this is done in the scGate_model folder)
+```{r}
+library(ggparty)
+db <- scGate::get_scGateDB()
+scGate::plot_tree(db$human$generic$panDC)
+
+gated.list <- lapply(seurat.list, function(x) {
+
+  scGate::scGate(x, model = db$human$generic$panDC, ncores = 8, k.param=30)
+#  scGate::scGate(x, model = db$human$generic$panDC, ncores = 8, reduction="pca")
+
+})
+```
+
+```{r fig.height=4}
+pll <- list()
+
+pll <- lapply(names(gated.list), function(n) {
+  x <- gated.list[[n]]
+  
+  DimPlot(x, group.by = "is.pure") + ggtitle(n)
+})  
+wrap_plots(pll)
+```
+
+```{r fig.height=7}
+which.ds <- "zilionis"
+
+ss <- grep("UCell", colnames(gated.list[[which.ds]][[]]), value = T)
+
+FeaturePlot(gated.list[[which.ds]], ss)
+```
+
+```{r fig.height=3}
+FeaturePlot(gated.list[[which.ds]], c("CLEC9A","XCR1","BATF3","CADM1"))
+FeaturePlot(gated.list[[which.ds]], c("IDO1","FLT3","NAAA","CST3"))
+FeaturePlot(gated.list[[which.ds]], c("S100B","CD1C","CLEC10A","CD1A"))
+FeaturePlot(gated.list[[which.ds]], c("LAMP3","CD274","CCL22","CCL19"))
+FeaturePlot(gated.list[[which.ds]], c("IRF7","LILRA4","TCF4","CLEC4C"))
+FeaturePlot(gated.list[[which.ds]], c("S100A9","S100A8","FCN1","VCAN"))
+```
+
+```{r}
+table(gated.list[[which.ds]]$state, gated.list[[which.ds]]$is.pure)
+table(gated.list[[which.ds]]$DC.class, gated.list[[which.ds]]$is.pure)
+```
