@@ -115,8 +115,10 @@ wrap_plots(ppp, ncol=4)
 ```
 
 In particular, Zilionis and Zhang data sets contain MoMac besides DCs, and Villani contains some monocytes - can we tell them apart?
-```{r fig.height=7, fig.width=7}
+```{r fig.height=3.5, fig.width=3.5}
 wrap_plots(ppp[c("zilionis","zhang","zhangcrc","villani")], ncol=2)
+
+wrap_plots(ppp[c("zilionis","qianbc","qiancrc","qianlung")], ncol=2)
 ```
 
 Set up scGate models (this is done in the scGate_model folder)
@@ -142,6 +144,13 @@ pll <- lapply(names(gated.list), function(n) {
   DimPlot(x, group.by = "is.pure") + ggtitle(n)
 })  
 wrap_plots(pll)
+names(pll) <- names(gated.list)
+```
+
+```{r fig.height=3.5, fig.width=4}
+wrap_plots(pll[c("zilionis","zhang","zhangcrc","villani")], ncol=2)
+
+wrap_plots(pll[c("zilionis","qianbc","qiancrc","qianlung")], ncol=2)
 ```
 
 ```{r fig.height=7}

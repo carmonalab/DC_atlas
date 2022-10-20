@@ -110,6 +110,34 @@ ref <- make.reference(object_integrated, recalculate.umap = TRUE,
 DimPlot(ref, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
 ggsave("plots/DC_reference.pdf", height=5, width=7)
 ```
+Recluster?
+```{r}
+k.param <- 20
+res <- 0.2
+set.seed(123)
+
+ref <- FindNeighbors(ref, k.param=k.param, dims=1:ndim)
+ref <- FindClusters(ref, resolution = res, graph.name = "integrated_snn")
+
+DimPlot(ref, reduction = "umap", group.by="seurat_clusters") + theme(aspect.ratio = 1)
+```
+
+```{r}
+Idents(ref) <- "seurat_clusters"
+DefaultAssay(ref) <- "RNA"
+
+set.seed(1234)
+cluster.markers <- FindAllMarkers(ref, only.pos = T, min.pct = 0.1, min.diff.pct=0.1, 
+                                  logfc.threshold = 0.25, max.cells.per.ident = 500, test.use="wilcox",base=exp(1))
+
+all <- cluster.markers |> dplyr::group_by(cluster) |> dplyr::top_n(n = 50, wt = abs(avg_logFC))
+
+for (i in levels(ref@active.ident)) {
+    print(subset(all, cluster==i))
+}  
+DefaultAssay(ref) <- "integrated"
+
+```
 
 # Try dataset projection
 ```{r}

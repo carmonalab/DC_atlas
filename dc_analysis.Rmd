@@ -247,11 +247,11 @@ Can we build simple signatures based on marker genes?
 sigs <- list()
 
 sigs$cDC1 <- c("CLEC9A","XCR1","BATF3","CADM1")
-#sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A")
-sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A","S100A9-","S100A8-","FCN1-")
+sigs$cDC2_ <- c("FCER1A","CD1C","CLEC10A","FCGR2A")
+#sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A","S100A9-","S100A8-","FCN1-","VCAN-")
 sigs$DC3 <- c("LAMP3","CCR7","FSCN1","IL3RA")
 sigs$pDC <- c("IRF7","LILRA4","TCF4")
-sigs$MoDC <- c("S100A9","S100A8","FCN1","VCAN")
+#sigs$MoDC <- c("S100A9","S100A8","FCN1","VCAN")
 
 dc.seurat <- lapply(dc.seurat, function(x) {
   dc.seurat <- AddModuleScore_UCell(x, features=sigs, name=NULL)
