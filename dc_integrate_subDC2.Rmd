@@ -180,7 +180,9 @@ object_integrated$annotation <- NA
 object_integrated$annotation[object_integrated$seurat_clusters %in% c("0")] <- "cDC2_CLEC10A"
 object_integrated$annotation[object_integrated$seurat_clusters %in% c("1","9")] <- "cDC1"
 object_integrated$annotation[object_integrated$seurat_clusters %in% c("2")] <- "DC3"
-object_integrated$annotation[object_integrated$seurat_clusters %in% c("3","7")] <- "cDC2_CD1A"
+#object_integrated$annotation[object_integrated$seurat_clusters %in% c("3","7","10")] <- "cDC2_CD1A"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("3")] <- "cDC2_CD1A_A"
+object_integrated$annotation[object_integrated$seurat_clusters %in% c("7")] <- "cDC2_CD1A_B"
 
 object_integrated$annotation[object_integrated$seurat_clusters %in% c("4")] <- "MonoDC"
 object_integrated$annotation[object_integrated$seurat_clusters %in% c("5")] <- "pDC"
@@ -196,7 +198,7 @@ Make it into reference map
 library(ProjecTILs)
 DefaultAssay(object_integrated) <- 'integrated'
 ref <- make.reference(object_integrated, recalculate.umap = TRUE,
-                      annotation.column = "annotation", ndim = 30)
+                      annotation.column = "annotation", ndim = 40)
 
 ```
 
@@ -222,12 +224,8 @@ FeaturePlot(ref, features=c("ZBTB46","ITGAX","CLEC10A","FCGR2A"))
 ```
 
 ```{r fig.height=3}
-library(RColorBrewer)
-ccc <- brewer.pal(n=length(ss)+1, name="Set3")
-names(ccc) <- c(names(ss), "Multi")
-
 p1 <- DimPlot(ref, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
-p2 <- DimPlot(ref, reduction="umap", group.by="scGate_multi", cols=ccc) + theme(aspect.ratio = 1)
+p2 <- DimPlot(ref, reduction="umap", group.by="scGate_multi") + theme(aspect.ratio = 1)
 p1 | p2
 
 ggsave("plots/DC_reference_bysample.pdf", height = 5, width=10)
@@ -382,13 +380,11 @@ DefaultAssay(ref.copy) <- "RNA"
 
 split <- SplitObject(ref.copy, split.by = "Study")
 
-genes <- c("PPP1R14A","AXL","CLEC9A","XCR1","CADM1","CD1A","CD207","CLEC10A","CD1C",
+genes <- c("PRDM16","ACY3","PPP1R14A","AXL","CLEC9A","XCR1","CADM1","CD1A","CD207","CLEC10A","CD1C",
                  "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
-                 "GZMB","LILRA4","TCF4","PRDM16","ACY3","ITGAX","TRAC","CD3E","CD3D","CD3G")
+                 "GZMB","LILRA4","TCF4","ITGAX","CD3E","CD3D","CD3G","TRBC2","CD2","TRAC","LCK","CD7","KLRB1")
 
 VlnPlot(ref.copy, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-
-ggsave("plots/DC_annotated_violins.pdf", height=8, width=6)
 
 VlnPlot(split$maier, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
 VlnPlot(split$qian, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")

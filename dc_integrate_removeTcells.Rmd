@@ -29,13 +29,15 @@ Read in pre-integrated object (see dc_integrate.Rmd)
 ```{r}
 ref.init <- readRDS("aux/DC_reference_wTcells.rds")
 
-DimPlot(ref.init, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
+DimPlot(ref.init, group.by = "functional.cluster", label = TRUE, cols=ref.init@misc$atlas.palette) + theme(aspect.ratio = 1)
 ```
 
 Remove T cell doublets
 ```{r}
 ref.init <- subset(ref.init, subset=functional.cluster != "Tcell_doublets")
-ref.init$pre.label <- ref.init$functional.cluster
+ref.init$pre.label <- as.character(ref.init$functional.cluster)
+ref.init$pre.label[ref.init$pre.label == "PRDM16_DC"] <- NA
+
 table(ref.init$pre.label)
 ```
 
@@ -107,7 +109,12 @@ ref <- make.reference(object_integrated, recalculate.umap = TRUE,
 ```
 
 ```{r}
-DimPlot(ref, group.by = "functional.cluster", label = TRUE) + theme(aspect.ratio = 1)
+states <- levels(ref$functional.cluster)
+palette <- brewer.pal(n = length(states), name = "Paired")
+names(palette) <- states
+ref@misc$atlas.palette <- palette
+
+DimPlot(ref, group.by = "functional.cluster", label = TRUE, cols = palette) + theme(aspect.ratio = 1)
 ggsave("plots/DC_reference.pdf", height=5, width=7)
 ```
 Recluster?
@@ -167,4 +174,23 @@ for (c in celltypes) {
 }
 
 wrap_plots(pll, ncol=4)
+ggsave("plots/Brown_projected_bysubtype.noTcells.png", height=9, width=22)
+```
+
+
+Composition
+```{r}
+plot.statepred.composition(ref=ref, query=brown.projected)
+ggsave("plots/Brown_projected_composition.noTcells.png", height=3.5, width=5)
+```
+
+
+Profile agreement
+```{r fig.height=4}
+genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
+                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
+                 "GZMB","LILRA4","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
+
+plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar)
+ggsave("plots/Brown_projected_radar.noTcells.png", height=10, width=14)
 ```
