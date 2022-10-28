@@ -223,8 +223,9 @@ FeaturePlot(ref, features=c("ZBTB46","ITGAX","CLEC10A","FCGR2A"))
 
 ```{r fig.height=3}
 library(RColorBrewer)
+ss <- unique(ref$scGate_multi)
 ccc <- brewer.pal(n=length(ss)+1, name="Set3")
-names(ccc) <- c(names(ss), "Multi")
+names(ccc) <- ss
 
 p1 <- DimPlot(ref, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(ref, reduction="umap", group.by="scGate_multi", cols=ccc) + theme(aspect.ratio = 1)
@@ -249,7 +250,7 @@ DimPlot(brown, group.by = "scGate_multi")
 ```
 
 ```{r}
-brown.projected <- Run.ProjecTILs(brown, ref=ref, filter.cells = FALSE)
+brown.projected <- Run.ProjecTILs(brown, ref=ref, filter.cells = FALSE, reduction = "pca")
 ```
 
 See results
@@ -282,7 +283,7 @@ genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
                  "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
                  "GZMB","LILRA4","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
 
-plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar)
+plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar, min.cells = 10)
 ```
 
 Where are specific subtypes, e.g. the "DC5" by Villani et al.?
@@ -375,6 +376,54 @@ ggsave("plots/DC_ref_Tcell_and_cycling.png", height=6, width=11)
 DefaultAssay(ref.copy) <- "integrated"
 ```
 
+# A deeper dive into T cell doublets. Are there preferences for DC subtypes and CD4/CD8 T cells?
+```{r fig.width=4}
+ref.copy2 <- ref.copy
+DefaultAssay(ref.copy2) <- "RNA"
+Idents(ref.copy2) <- "scGate_multi"
+
+FeaturePlot(ref.copy2, features=c("cDC1_kNN","cDC2__kNN","DC3_kNN","Tcell_kNN"))
+DimPlot(ref.copy2, group.by = "scGate_multi")
+
+hist(ref.copy2$Tcell_kNN, breaks=30)
+
+ref.copy2$is.doublet <- "FALSE"
+ref.copy2$is.doublet[ref.copy2$Tcell_kNN > 0.2] <- TRUE
+
+DimPlot(ref.copy2, group.by = "is.doublet")
+ref.copy2 <- subset(ref.copy2, subset=scGate_multi %in% c("cDC1","cDC2","DC3"))
+doub <- subset(ref.copy2, subset=is.doublet==TRUE)
+nodoub <- subset(ref.copy2, subset=is.doublet==FALSE)
+
+FeaturePlot(ref.copy2, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"), order=T)
+
+a <- VlnPlot(doub, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"),  ncol=6)
+b <- VlnPlot(nodoub, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"), ncol=6)
+
+a / b
+```
+Smooth expression values, to mitigate sparsity
+```{r fig.width=4}
+genes <- c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG")
+
+expr <- Seurat::GetAssayData(ref.copy2, assay="RNA", slot="data")[genes,]
+expr <- t(as.matrix(expr))
+ref.copy2 <- AddMetaData(ref.copy2, metadata=as.data.frame(expr))
+
+ref.copy2 <- SmoothKNN(ref.copy2, signature.names = genes, k=5)
+
+feats <- paste0(genes, "_kNN")
+FeaturePlot(ref.copy2, features = feats, max.cutoff = 'q99', ncol=3)
+
+doub <- subset(ref.copy2, subset=is.doublet==TRUE)
+nodoub <- subset(ref.copy2, subset=is.doublet==FALSE)
+
+a <- VlnPlot(doub, features = feats,  ncol=6, pt.size = 0)
+b <- VlnPlot(nodoub, features = feats, ncol=6, pt.size = 0)
+
+a / b
+
+```
 
 Violin plot of marker genes
 ```{r fig.height=4, fig.width=3}
