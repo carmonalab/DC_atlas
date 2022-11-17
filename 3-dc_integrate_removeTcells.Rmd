@@ -12,6 +12,7 @@ Libraries
 ```{r}
 #remotes::install_github('carmonalab/UCell')
 #remotes::install_github('carmonalab/STACAS')
+#remotes::install_github('carmonalab/scGate', ref='dev')
 #remotes::install_github('carmonalab/ProjecTILs')
 
 library(ggplot2)
@@ -289,10 +290,18 @@ DimPlot(ref, group.by = "functional.cluster", cols = ref@misc$atlas.palette, lab
 Add scGate model for filtering
 ```{r}
 library(scGate)
-models <- scGate::get_scGateDB()
+models <- scGate::get_scGateDB(branch = 'dev', version='v0.11')
 
 ref@misc$scGate$human <- models$human$generic$panDC
-ref@misc$scGate$mouse <- NULL  #NB! must add mouse model
+ref@misc$scGate$mouse <- models$mouse$generic$panDC
+```
+
+Remove unnecessary metadata
+```{r}
+ref@meta.data <- ref@meta.data[,c("orig.ident","Study","nCount_RNA","nFeature_RNA",
+                               "barcode","numi","state",
+                               "percent.ribo","percent.mito",
+                               "cycling1_UCell","cycling2_UCell","functional.cluster")]
 ```
 
 Save reference object
@@ -301,53 +310,4 @@ pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
 saveRDS(ref, "aux/DC_reference_v0.1.rds")
 saveRDS(ref, paste0(pdir,"/DC_reference_v0.1.rds"))
-```
-
-# Try dataset projection
-```{r}
-pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
-
-dataset.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
-
-brown <- dataset.list$brownSpleen
-
-DimPlot(brown, group.by = "state")
-DimPlot(brown, group.by = "scGate_multi")
-```
-
-```{r}
-brown.projected <- Run.ProjecTILs(brown, ref=ref, filter.cells = FALSE)
-```
-
-
-
-```{r fig.height=3.5, fig.width=10}
-celltypes <- unique(brown.projected$state)
-pll <- list()
-
-for (c in celltypes) {
-  sub <- subset(brown.projected, subset=state==c)
-  pll[[c]] <- plot.projection(ref, query=sub, linesize = 0.5, pointsize = 0.5) + ggtitle(c)
-}
-
-wrap_plots(pll, ncol=4)
-ggsave("plots/Brown_projected_bysubtype.noTcells.png", height=9, width=22)
-```
-
-
-Composition
-```{r}
-plot.statepred.composition(ref=ref, query=brown.projected)
-ggsave("plots/Brown_projected_composition.noTcells.png", height=3.5, width=5)
-```
-
-
-Profile agreement
-```{r fig.height=4}
-genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
-                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
-                 "GZMB","LILRA4","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
-
-plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar, min.cells = 10)
-ggsave("plots/Brown_projected_radar.noTcells.png", height=10, width=14)
 ```

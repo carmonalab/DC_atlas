@@ -42,6 +42,7 @@ FeaturePlot(ref, features=c("CD1A","CD207","CLEC10A","FCGBP"))
 FeaturePlot(ref, features=c("LAMP3","BIRC3","GZMB","CCR7"))
 FeaturePlot(ref, features=c("FCER1A","CD1C","CLEC10A","FCGR2A"))
 FeaturePlot(ref, features=c("CD1A","CD207","HLA-DQA1","HLA-DQB1"))
+FeaturePlot(ref, features=c("CADM1","XCR1","CD200R1","CD200R1L"))
 ```
 
 
@@ -88,23 +89,40 @@ Violin plot of marker genes
 ```{r fig.height=5, fig.width=3}
 DefaultAssay(ref.copy) <- "RNA"
 
-split <- SplitObject(ref.copy, split.by = "Study")
-
 genes <- c("CLEC9A","XCR1","CADM1","CLEC10A","FCGR2A","FCER1A","CD1C","CD1A","CD207",
                  "LAMP3","CCR7","FSCN1","GZMB","LILRA4","TCF4","PPP1R14A","AXL",
            "S100A8","S100A9","VCAN","FCN1","ITGAX","HLA-DRA", "HLA-DQA1","HLA-DQB1")
+
+#genes <- c(genes, "CD200R1","CD200R1L","RAMP1","CALCRL","CALCA","CALCB")
 
 VlnPlot(ref.copy, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
 
 ggsave("plots/DC_annotated_violins.pdf", height=8, width=6)
 
-VlnPlot(split$maier, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$qian, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$zilionis, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$qianlung, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$qiancrc, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$martin, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+#split <- SplitObject(ref.copy, split.by = "Study")
+#VlnPlot(split$maier, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+#VlnPlot(split$qian, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+#VlnPlot(split$zilionis, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+#VlnPlot(split$qianlung, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+#VlnPlot(split$qiancrc, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+#VlnPlot(split$martin, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
 
+```
+Try with gene expression smoothing
+```{r fig.height=5, fig.width=3}
+obj <- ref.copy
+
+expr <- Seurat::GetAssayData(obj, assay="RNA", slot="data")[genes,]
+expr <- as.data.frame(t(as.matrix(expr)))
+
+obj <- AddMetaData(obj, metadata=expr)
+
+obj <- SmoothKNN(obj, signature.names=genes,
+                           reduction="pca", k=20, suffix = "_smooth")
+
+VlnPlot(obj, features = paste0(genes,"_smooth"), stack = TRUE, flip=TRUE,
+        fill.by = "ident", cols = ref@misc$atlas.palette)
+ggsave("plots/DC_annotated_violins_smooth.pdf", height=8, width=6)
 ```
 
 Subset composition

@@ -174,3 +174,89 @@ FeaturePlot(gated.list[[which.ds]], c("S100A9","S100A8","FCN1","VCAN"))
 table(gated.list[[which.ds]]$state, gated.list[[which.ds]]$is.pure)
 table(gated.list[[which.ds]]$DC.class, gated.list[[which.ds]]$is.pure)
 ```
+
+#For mouse data
+```{r}
+BiocManager::install('scRNAseq')
+library(scRNAseq)
+
+sce <- ZilionisLungData('mouse')
+#seurat <- as.Seurat(sce, counts = "counts", data=NULL)
+
+counts <- Matrix::Matrix(counts(sce),sparse = TRUE)
+meta <- colData(sce)
+
+seurat <- CreateSeuratObject(counts)
+seurat <- AddMetaData(seurat, metadata = as.data.frame(meta))
+```
+
+```{r fig.width=6}
+seurat <- seurat |> NormalizeData() |> FindVariableFeatures(nfeatures=1000) |>
+  ScaleData() |>  RunPCA(npcs=20) |> RunUMAP(dims=1:20)
+
+a <- DimPlot(seurat, group.by="Major.cell.type") + theme(aspect.ratio = 1)
+b <- DimPlot(seurat, group.by="Minor.subset") + theme(aspect.ratio = 1)
+a | b
+```
+
+```{r fig.width=6}
+seurat$Prior <- seurat$Major.cell.type
+seurat$isDC <- "NotDC"
+
+DCs <- grep('DC', names(table(seurat$Minor.subset)), value=T)
+
+seurat$Prior[seurat$Minor.subset %in% DCs] <- seurat$Minor.subset[seurat$Minor.subset %in% DCs]
+seurat$isDC[seurat$Minor.subset %in% DCs] <- seurat$Minor.subset[seurat$Minor.subset %in% DCs]
+
+a <- DimPlot(seurat, group.by="Prior") + theme(aspect.ratio = 1)
+b <- DimPlot(seurat, group.by="isDC") + theme(aspect.ratio = 1)
+a | b
+```
+
+```{r fig.height=3}
+#Only H2-A is present in all mouse models
+FeaturePlot(seurat, features=c("H2-Aa","H2-Ab1","H2-Eb1","H2-Eb2"))
+FeaturePlot(seurat, features=c("Itgae","Clec9a","Xcr1","Cd36"))
+FeaturePlot(seurat, features=c("Cadm1","Cd24a","Flt3","Irf8"))
+FeaturePlot(seurat, features=c("Clec10a","Cd1d1","Lilrb4","Cebpb"))
+FeaturePlot(seurat, features=c("Fscn1","Ccr7","Tnfrsf9","Ccl22"))
+FeaturePlot(seurat, features=c("Siglech","Bst2","Tcf4","Ccr9"))
+FeaturePlot(seurat, features=c("S100a9","Lyz1","Csf1r","Vcan"))
+FeaturePlot(seurat, features=c("Cd40","Cd68","Cd14","Fcgr1"))
+
+FeaturePlot(seurat, features=c("Csf3r","S100a9","S100a8","Mmp9"))
+```
+
+#Subset on DCs
+```{r}
+dc <- subset(seurat, subset=isDC=="NotDC", invert=T)
+
+dc <- dc |> NormalizeData() |> FindVariableFeatures(nfeatures=500) |>
+  ScaleData() |>  RunPCA(npcs=20) |> RunUMAP(dims=1:20)
+
+DimPlot(dc, group.by="isDC") + theme(aspect.ratio = 1)
+```
+
+```{r fig.height=2.5}
+FeaturePlot(dc, features=c("H2-Aa","H2-Ab1","H2-Eb1","H2-Eb2"))
+FeaturePlot(dc, features=c("Itgae","Clec9a","Xcr1","Cd36"))
+FeaturePlot(dc, features=c("Cadm1","Cd24a","Flt3","Irf8"))
+FeaturePlot(dc, features=c("Clec10a","Cd1d1","Lilrb4","Cebpb"))
+FeaturePlot(dc, features=c("Fscn1","Ccr7","Tnfrsf9","Ccl22"))
+FeaturePlot(dc, features=c("Siglech","Bst2","Tcf4","Ccr9"))
+FeaturePlot(dc, features=c("S100a9","Lyz1","Csf1r","Vcan"))
+FeaturePlot(dc, features=c("Cd40","Cd68","Cd14","Fcgr1a"))
+
+```
+
+```{r}
+models <- scGate::get_scGateDB()
+
+panDC <- models$mouse$generic$panDC
+
+gated <- scGate::scGate(seurat, model=panDC, ncores=4)
+```
+
+```{r}
+DimPlot(gated, group.by='is.pure')
+```
