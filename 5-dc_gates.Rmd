@@ -225,6 +225,7 @@ FeaturePlot(seurat, features=c("S100a9","Lyz1","Csf1r","Vcan"))
 FeaturePlot(seurat, features=c("Cd40","Cd68","Cd14","Fcgr1"))
 
 FeaturePlot(seurat, features=c("Csf3r","S100a9","S100a8","Mmp9"))
+FeaturePlot(seurat, features=c("Csf1r","Flt3","Gzmb","Mmp9"))
 ```
 
 #Subset on DCs

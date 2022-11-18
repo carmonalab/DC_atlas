@@ -302,6 +302,8 @@ ref@meta.data <- ref@meta.data[,c("orig.ident","Study","nCount_RNA","nFeature_RN
                                "barcode","numi","state",
                                "percent.ribo","percent.mito",
                                "cycling1_UCell","cycling2_UCell","functional.cluster")]
+
+ref@misc$projecTILs <- "DC_human"
 ```
 
 Save reference object
@@ -310,4 +312,16 @@ pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
 saveRDS(ref, "aux/DC_reference_v0.1.rds")
 saveRDS(ref, paste0(pdir,"/DC_reference_v0.1.rds"))
+```
+
+Make a downsampled version for SPICA
+```{r}
+sdir <- "~/Dropbox/CSI/SPICA_atlases"
+
+spica.ref <- subset(ref, downsample=2000)
+spica.ref <- DietSeurat(spica.ref, counts=FALSE, data=TRUE, dimreducs = c("pca","umap"))
+
+DimPlot(spica.ref, cols = spica.ref@misc$atlas.palette)
+
+saveRDS(spica.ref, paste0(sdir,"/DC_reference_v0.1.SPICA.rds"))
 ```

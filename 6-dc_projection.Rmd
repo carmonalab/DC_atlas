@@ -134,5 +134,24 @@ genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
                  "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
                  "GZMB","TSPAN13","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
 
-plot.states.radar(ref, query=zilionis.proj, genes4radar = genes4radar, min.cells = 10)
+plot.states.radar(ref, query=zilionis.proj, genes4radar = genes4radar, min.cells =5)
 ```
+
+Why are pDCs misclassified? poor human-mouse correspondence?
+```{r fig.height=5}
+DefaultAssay(zilionis.proj) <- "RNA"
+
+t <- table(zilionis.proj$Minor.subset)
+subs <- names(t[t>10])
+
+tmp <- subset(zilionis.proj, subset=Minor.subset %in% subs)
+Idents(tmp) <- "Minor.subset"
+
+genes <- c("CLEC9A","XCR1","CADM1","CLEC10A","FCER1A","CD207",
+                 "LAMP3","CCR7","FSCN1","GZMB","TCF4","PPP1R14A","AXL",
+           "S100A8","S100A9","VCAN","FCN1","ITGAX")
+genes <- genes[genes %in% rownames(tmp)]
+
+VlnPlot(tmp, features = genes, fill.by = "ident")
+```
+
