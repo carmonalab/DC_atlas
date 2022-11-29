@@ -68,9 +68,9 @@ ggsave("plots/Brown_projected_composition.noTcells.png", height=3.5, width=5)
 
 Profile agreement
 ```{r fig.height=4}
-genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
+genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A","CD207",
                  "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
-                 "GZMB","LILRA4","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
+                 "GZMB","LILRA4","TCF4","PPP1R14A","AXL")
 
 plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar, min.cells = 10)
 ggsave("plots/Brown_projected_radar.noTcells.png", height=10, width=14)
@@ -132,7 +132,7 @@ Profile agreement
 ```{r fig.height=4}
 genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
                  "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
-                 "GZMB","TSPAN13","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
+                 "GZMB","TSPAN13","TCF4","PPP1R14A","AXL")
 
 plot.states.radar(ref, query=zilionis.proj, genes4radar = genes4radar, min.cells =5)
 ```
@@ -154,4 +154,46 @@ genes <- genes[genes %in% rownames(tmp)]
 
 VlnPlot(tmp, features = genes, fill.by = "ident")
 ```
+Project the 'Tcell doublets' identified in first round of integration - can they be classified to their respective subtype?
+```{r}
+all.data <- readRDS("aux/DC_reference_wTcells.rds")
+table(all.data$functional.cluster)
+all.data$prev.label <- all.data$functional.cluster
 
+dataset.list <- SplitObject(all.data, "Study")
+```
+
+```{r}
+all.projected <- Run.ProjecTILs(dataset.list, ref=ref, filter.cells = FALSE,
+                                ncores=8, fast.mode=TRUE)
+```
+
+```{r}
+all.merged <- Reduce(f=merge.Seurat.embeddings, x=all.projected)
+doublets <- subset(all.merged, subset=prev.label=="Tcell_doublets")
+
+table(doublets$Study, doublets$functional.cluster)
+```
+
+```{r fig.height=4}
+genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
+                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
+                 "GZMB","TSPAN13","TCF4","PPP1R14A","AXL")
+
+plot.states.radar(ref, query=doublets, genes4radar = genes4radar, min.cells =5)
+
+plot.states.radar(ref, query=doublets, min.cells =5,
+                  genes4radar = c(genes4radar,c("TRAC","CD8A","CD4") ))
+
+```
+
+Any preference for CD8 or CD4 in the doublets associated to different subtypes?
+```{r fig.height=3}
+t <- table(doublets$functional.cluster)
+subs <- names(t)[t>10]
+sb <- subset(doublets, subset=functional.cluster %in% subs)
+
+DefaultAssay(sb) <- 'RNA'
+VlnPlot(sb, features=c("CD4","CD8A","CD8B","CLEC9A","CLEC10A","VCAN"),
+        group.by = "functional.cluster", pt.size = 0, cols = ref@misc$atlas.palette)
+```

@@ -33,6 +33,8 @@ ref <- readRDS(paste0(pdir,"/DC_reference_v0.1.rds"))
 palette <- ref@misc$atlas.palette
 
 DimPlot(ref, cols = palette, label=T) + theme(aspect.ratio = 1)
+ggsave("plots/DC_reference_umap.pdf", height=4, width=7)
+ggsave("plots/DC_reference_umap.png", height=4, width=7)
 ```
 
 
