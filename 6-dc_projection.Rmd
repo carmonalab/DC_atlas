@@ -197,3 +197,23 @@ DefaultAssay(sb) <- 'RNA'
 VlnPlot(sb, features=c("CD4","CD8A","CD8B","CLEC9A","CLEC10A","VCAN"),
         group.by = "functional.cluster", pt.size = 0, cols = ref@misc$atlas.palette)
 ```
+
+Compare to baseline
+
+```{r fig.height=3}
+nondoublets <- subset(all.merged, subset=prev.label=="Tcell_doublets", invert=T)
+
+65DefaultAssay(nondoublets) <- 'RNA'
+VlnPlot(nondoublets, features=c("CD4","CD8A","CD8B","CLEC9A","CLEC10A","VCAN"),
+        group.by = "functional.cluster", pt.size = 0, cols = ref@misc$atlas.palette)
+
+a <- VlnPlot(sb, features=c("CD4","CD8A","CD8B"),
+             group.by = "functional.cluster", pt.size = 0, cols = ref@misc$atlas.palette)
+b <- VlnPlot(nondoublets, features=c("CD4","CD8A","CD8B"),
+             group.by = "functional.cluster", pt.size = 0, cols = ref@misc$atlas.palette)
+a / b
+```
+
+
+
+
