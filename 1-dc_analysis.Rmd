@@ -35,6 +35,8 @@ geneRef <- data.table::fread(geneRef_file)
 
 Read in data for individual studies
 ```{r}
+#Data on dropbox, also direct link: https://www.dropbox.com/s/uz590gzx4s36tdi/Gerhard_metanalysis_seuratlist.rds?dl=0 
+
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 ddir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM/exported"
 
@@ -114,6 +116,7 @@ M_i = seurat.list$qian$nUMI
 M_ave = mean(M_i)
 counts <- seurat.list$qian@assays$RNA@data * M_i / M_ave
 ```
+
 
 Basic exploration of data
 ```{r}
@@ -248,7 +251,7 @@ sigs <- list()
 
 sigs$cDC1 <- c("CLEC9A","XCR1","BATF3","CADM1")
 sigs$cDC2_ <- c("FCER1A","CD1C","CLEC10A","FCGR2A")
-sigs$DC3 <- c("LAMP3","CCR7","FSCN1","IL3RA")
+sigs$DC3 <- c("LAMP3","CCR7","FSCN1")
 sigs$pDC <- c("IRF7","LILRA4","TCF4")
 
 

@@ -27,7 +27,9 @@ library(STACAS)
 
 #NB: for conversion between Scanpy format to matrix files, see export_data.py script
 
-Read in data as Seurat objects (see dc_analysis.Rmd for data conversion)
+Read in data as Seurat objects (see 1-dc_analysis.Rmd for data conversion)
+
+Also, direct link to pre-processed data: https://www.dropbox.com/s/j50p3newch3hn8n/Gerhard_metanalysis_seuratlist.DC.anno.rds?dl=0
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
