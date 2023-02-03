@@ -36,7 +36,14 @@ DimPlot(ref, cols = palette, label=T) + theme(aspect.ratio = 1)
 ggsave("plots/DC_reference_umap.pdf", height=4, width=7)
 ggsave("plots/DC_reference_umap.png", height=4, width=7)
 ```
+```{r}
+p1 <- DimPlot(ref, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
+p2 <- DimPlot(ref, cols = palette, label=T) + theme(aspect.ratio = 1)
+p1 | p2
 
+#Save object
+ggsave("plots/DC_reference_bysample_noDoub.pdf", height = 5, width=10)
+```
 
 ```{r fig.height=3.5}
 DefaultAssay(ref) <- "RNA"

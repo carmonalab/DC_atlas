@@ -33,6 +33,21 @@ ref.init <- readRDS("aux/DC_reference_wTcells.rds")
 DimPlot(ref.init, group.by = "functional.cluster", label = TRUE, cols=ref.init@misc$atlas.palette) + theme(aspect.ratio = 1)
 ```
 
+Violin plot of marker genes
+```{r fig.height=5, fig.width=3}
+DefaultAssay(ref.init) <- "RNA"
+
+genes <- c("AXL","PPP1R14A","CLEC9A","XCR1","CADM1","CD207","CD1A","CD1C","CLEC10A","FCGR2A",
+                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1","GZMB","LILRA4","TCF4",
+           "PRDM16","TRAC","CD3D","CD3E","HLA-DRA", "HLA-DQA1","HLA-DQB1")
+
+VlnPlot(ref.init, features = genes, stack = TRUE, cols = ref.init@misc$atlas.palette, flip = TRUE, fill.by = "ident")
+
+ggsave("plots/DC_annotated_violins_wDoublets.pdf", height=9, width=6)
+
+DefaultAssay(ref.init) <- "integrated"
+```
+
 Remove T cell doublets and cycling cells
 ```{r}
 library(SignatuR)
