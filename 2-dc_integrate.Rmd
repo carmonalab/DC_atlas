@@ -10,9 +10,7 @@ renv::restore()
 
 Libraries
 ```{r}
-#remotes::install_github('carmonalab/UCell')
 #remotes::install_github('carmonalab/STACAS')
-#remotes::install_github('carmonalab/ProjecTILs')
 
 library(ggplot2)
 library(Seurat)
@@ -25,24 +23,20 @@ library(UCell)
 library(STACAS)
 ```
 
-#NB: for conversion between Scanpy format to matrix files, see export_data.py script
 
-Read in data as Seurat objects (see 1-dc_analysis.Rmd for data conversion)
+Read in data as Seurat objects (see 1-dc_preprocess.Rmd for data conversion)
 
-Also, direct link to pre-processed data: https://www.dropbox.com/s/j50p3newch3hn8n/Gerhard_metanalysis_seuratlist.DC.anno.rds?dl=0
+Direct link to pre-processed data, with scGate annotations: https://www.dropbox.com/s/j50p3newch3hn8n/Gerhard_metanalysis_seuratlist.DC.anno.rds?dl=0
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
 seurat.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
 
-#Exclude Brown dataset
+#Exclude Brown dataset - we will use it as a validation set
 seurat.list <- seurat.list[names(seurat.list) != "brownSpleen"]
-
-#only tumor samples
-#seurat.list <- seurat.list[(c("qian","qianbc","qiancrc","qianlung","qianovarian","maier","zhang","zhangcrc","zilionis"))]
 ```
 
-See batch effects
+See extent of batch effects
 ```{r fig.height=3}
 merged <- Reduce(merge, seurat.list)
 
@@ -55,7 +49,6 @@ names(palette) <- c("cDC1","cDC2","DC3","pDC","Multi")
 
 #palette <- brewer.pal(n=6, name="Set3")
 #names(palette) <- c("cDC1","cDC2","DC3","pDC","MoDC","Multi")
-
 
 p1 <- DimPlot(merged, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(merged, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
@@ -101,7 +94,6 @@ names(palette) <- c("cDC1","cDC2","DC3","pDC","Multi")
 #palette <- brewer.pal(n=6, name="Set3")
 #names(palette) <- c("cDC1","cDC2","DC3","pDC","MoDC","Multi")
 
-
 p1 <- DimPlot(object_integrated, reduction="umap", group.by="Study") + theme(aspect.ratio = 1)
 p2 <- DimPlot(object_integrated, reduction="umap", group.by="scGate_multi", cols=palette) + theme(aspect.ratio = 1)
 p1 | p2
@@ -139,14 +131,7 @@ for (i in levels(object_integrated@active.ident)) {
 DefaultAssay(object_integrated) <- "integrated"
 
 ```
-Pairwise differences
-```{r}
-pair.m <- FindMarkers(object_integrated, ident.1 = "3", ident.2 = "7", only.pos = TRUE)
-head(pair.m, 20)
 
-pair.n <- FindMarkers(object_integrated, ident.1 = "7", ident.2 = "3", only.pos = TRUE)
-head(pair.n, 20)
-```
 
 Where are specific subtypes, e.g. the "DC5" by Villani et al.?
 ```{r fig.height=10, fig.align=16}
@@ -220,7 +205,6 @@ FeaturePlot(ref, features=c("CD1A","CD207","ENTPD1","FCGBP"))
 FeaturePlot(ref, features=c("ACY3","PRDM16","LAMP3","TRAC"), order=T)
 FeaturePlot(ref, features=c("LAMP3","BIRC3","GZMB","CCR7"))
 FeaturePlot(ref, features=c("FCER1A","CD1C","CLEC10A","FCGR2A"))
-FeaturePlot(ref, features=c("ZBTB46","ITGAX","CLEC10A","FCGR2A"))
 ```
 
 ```{r fig.height=3}
@@ -234,95 +218,16 @@ p2 <- DimPlot(ref, reduction="umap", group.by="scGate_multi", cols=ccc) + theme(
 p1 | p2
 
 ggsave("plots/DC_reference_bysample.pdf", height = 5, width=10)
+```
 
-#Save object
+# Save object - reference with T cell doublets
+```{r}
+
 saveRDS(ref, "aux/DC_reference_wTcells.rds")
 ```
 
-# Try dataset projection
-```{r}
-pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
-dataset.list <- readRDS(sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
-
-brown <- dataset.list$brownSpleen
-
-DimPlot(brown, group.by = "state")
-DimPlot(brown, group.by = "scGate_multi")
-```
-
-```{r}
-brown.projected <- Run.ProjecTILs(brown, ref=ref, filter.cells = FALSE, reduction = "pca")
-```
-
-See results
-```{r}
-plot.projection(ref, brown.projected)
-```
-
-```{r fig.height=3, fig.width=8}
-celltypes <- unique(brown.projected$state)
-pll <- list()
-
-for (c in celltypes) {
-  sub <- subset(brown.projected, subset=state==c)
-  pll[[c]] <- plot.projection(ref, query=sub, linesize = 0.5, pointsize = 0.5) + ggtitle(c)
-}
-
-wrap_plots(pll, ncol=4)
-
-ggsave("plots/Brown_projected_bysubtype.png", height=9, width=22)
-```
-
-Composition
-```{r}
-plot.statepred.composition(ref=ref, query=brown.projected)
-```
-
-Profile agreement
-```{r fig.height=4}
-genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
-                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
-                 "GZMB","LILRA4","TCF4","PPP1R14A","AXL","PRDM16","ACY3")
-
-plot.states.radar(ref, query=brown.projected, genes4radar = genes4radar, min.cells = 10)
-```
-
-Where are specific subtypes, e.g. the "DC5" by Villani et al.?
-```{r fig.height=9, fig.align=12}
-p <- list()
-anns <- unique(ref$state)
-
-for (a in anns) {
-p[[a]] <- DimPlot(ref, reduction = "umap", cells.highlight = which(ref$state == a)) + 
-  theme(aspect.ratio = 1,
-        axis.title=element_blank(),
-        axis.text=element_blank(),
-        axis.ticks=element_blank()) +
-  NoLegend() + ggtitle(a)
-}
-
-wrap_plots(p)
-ggsave("plots/DC_reference_byorig_annot.png", height=18, width=24)
-```
-
-
-```{r fig.height=4, fig.align=9, eval=F}
-studies <- unique(ref$Study)
-for (s in studies) {
-  p <- list()
-  this <- subset(ref, subset=Study==s)
-  anns <- unique(this$state)
-  for (a in anns) {
-    p[[a]] <- DimPlot(ref, reduction = "umap", cells.highlight = which(ref$state == a)) + 
-      theme(aspect.ratio = 1) + NoLegend() + ggtitle(a)
-  }
-  
-  wrap <- wrap_plots(p)
-  plot(wrap)
-  ggsave(sprintf("plots/DC_reference_byorig_annot_split_%s.png",s), plot=wrap, height=5, width=13)
-}
-```
+# Optional code below (additional analyses on current reference)
 
 Find markers for subtypes in the reference
 ```{r}
@@ -360,94 +265,6 @@ heat <- DoHeatmap(ref.copy, assay="RNA", features=genes.use, group.by = "functio
 
 heat + scale_fill_gradientn(colors = c("blue", "white", "red"))
 ggsave("plots/DC_scHeatmap_topDEG.png", height=11, width=21)
-```
-
-
-```{r fig.height=3}
-DefaultAssay(ref.copy) <- "RNA"
-
-data("genes.blocklist")
-c1 <- genes.blocklist$Hs$cellCycle.G1S
-c2 <- genes.blocklist$Hs$cellCycle.G2M
-signatures <- list("Tcell"=c("CD2","CD3D","CD3E","CD3G","TRAC"), "cycling"=c(c1,c2))
-ref.copy <- AddModuleScore_UCell(ref.copy, features=signatures, name = NULL)
-ref.copy <- SmoothKNN(ref.copy, signature.names = c("Tcell","cycling"))
-FeaturePlot(ref.copy, features=c("TRAC","CD3D","Tcell_kNN","MKI67","STMN1","cycling_kNN"), ncol=3)
-ggsave("plots/DC_ref_Tcell_and_cycling.png", height=6, width=11)
-
-DefaultAssay(ref.copy) <- "integrated"
-```
-
-# A deeper dive into T cell doublets. Are there preferences for DC subtypes and CD4/CD8 T cells?
-```{r fig.width=4}
-ref.copy2 <- ref.copy
-DefaultAssay(ref.copy2) <- "RNA"
-Idents(ref.copy2) <- "scGate_multi"
-
-FeaturePlot(ref.copy2, features=c("cDC1_kNN","cDC2__kNN","DC3_kNN","Tcell_kNN"))
-DimPlot(ref.copy2, group.by = "scGate_multi")
-
-hist(ref.copy2$Tcell_kNN, breaks=30)
-
-ref.copy2$is.doublet <- "FALSE"
-ref.copy2$is.doublet[ref.copy2$Tcell_kNN > 0.2] <- TRUE
-
-DimPlot(ref.copy2, group.by = "is.doublet")
-ref.copy2 <- subset(ref.copy2, subset=scGate_multi %in% c("cDC1","cDC2","DC3"))
-doub <- subset(ref.copy2, subset=is.doublet==TRUE)
-nodoub <- subset(ref.copy2, subset=is.doublet==FALSE)
-
-FeaturePlot(ref.copy2, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"), order=T)
-
-a <- VlnPlot(doub, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"),  ncol=6)
-b <- VlnPlot(nodoub, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"), ncol=6)
-
-a / b
-```
-Smooth expression values, to mitigate sparsity
-```{r fig.width=4}
-genes <- c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG")
-
-expr <- Seurat::GetAssayData(ref.copy2, assay="RNA", slot="data")[genes,]
-expr <- t(as.matrix(expr))
-ref.copy2 <- AddMetaData(ref.copy2, metadata=as.data.frame(expr))
-
-ref.copy2 <- SmoothKNN(ref.copy2, signature.names = genes, k=5)
-
-feats <- paste0(genes, "_kNN")
-FeaturePlot(ref.copy2, features = feats, max.cutoff = 'q99', ncol=3)
-
-doub <- subset(ref.copy2, subset=is.doublet==TRUE)
-nodoub <- subset(ref.copy2, subset=is.doublet==FALSE)
-
-a <- VlnPlot(doub, features = feats,  ncol=6, pt.size = 0)
-b <- VlnPlot(nodoub, features = feats, ncol=6, pt.size = 0)
-
-a / b
-
-```
-
-Violin plot of marker genes
-```{r fig.height=4, fig.width=3}
-DefaultAssay(ref.copy) <- "RNA"
-
-split <- SplitObject(ref.copy, split.by = "Study")
-
-genes <- c("PPP1R14A","AXL","CLEC9A","XCR1","CADM1","CD1A","CD207","CLEC10A","CD1C",
-                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
-                 "GZMB","LILRA4","TCF4","PRDM16","ACY3","ITGAX","TRAC","CD3E","CD3D","CD3G")
-
-VlnPlot(ref.copy, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-
-ggsave("plots/DC_annotated_violins.pdf", height=8, width=6)
-
-VlnPlot(split$maier, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$qian, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$zilionis, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$qianlung, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$qiancrc, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-VlnPlot(split$martin, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-
 ```
 
 Subset composition
@@ -556,84 +373,79 @@ h <- make.heatmap(ref.copy, assay = "RNA", genes = genes.use, min.cells=20,
 ggsave("plots/DC_heatmap_pseudobulk_clustered.pdf", plot=h, height=7, width=10)
 ```
 
-# Simplify reference using SuperCell
-```{r}
-remotes::install_github("GfellerLab/SuperCell")
-library(SuperCell)
+# A deeper dive into T cell doublets. Are there preferences for DC subtypes and CD4/CD8 T cells?
+```{r fig.width=4}
+ref.copy2 <- ref.copy
+DefaultAssay(ref.copy2) <- "RNA"
+Idents(ref.copy2) <- "scGate_multi"
 
-gamma <- 20 # Graining level
-npcs <- 40 
+FeaturePlot(ref.copy2, features=c("cDC1_kNN","cDC2__kNN","DC3_kNN","Tcell_kNN"))
+DimPlot(ref.copy2, group.by = "scGate_multi")
 
-DefaultAssay(ref.copy) <- "integrated"
-# Compute metacells using SuperCell package
-MC <- SCimplify(
-  X = GetAssayData(ref.copy), # single-cell log-normalized gene expression data
-  genes.use = VariableFeatures(ref.copy), 
-  gamma = gamma,
-  n.pc = npcs
-)
+hist(ref.copy2$Tcell_kNN, breaks=30)
 
-MC.ge <- supercell_GE(
-  ge = GetAssayData(ref.copy),
-  groups = MC$membership
-)
+ref.copy2$is.doublet <- "FALSE"
+ref.copy2$is.doublet[ref.copy2$Tcell_kNN > 0.2] <- TRUE
 
-MC.ge.RNA <- supercell_GE(
-  ge = GetAssayData(ref.copy, assay="RNA"),
-  groups = MC$membership
-)
+DimPlot(ref.copy2, group.by = "is.doublet")
+ref.copy2 <- subset(ref.copy2, subset=scGate_multi %in% c("cDC1","cDC2","DC3"))
+doub <- subset(ref.copy2, subset=is.doublet==TRUE)
+nodoub <- subset(ref.copy2, subset=is.doublet==FALSE)
 
+FeaturePlot(ref.copy2, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"), order=T)
 
-# Annotate metacells to functional cluster
-MC$functional.cluster <- supercell_assign(
-  cluster = ref.copy$functional.cluster,          # single-cell assignment to cell lines 
-  supercell_membership = MC$membership,  # single-cell assignment to metacells
-  method = "absolute" # available methods are c("jaccard", "relative", "absolute"), function's help() for explanation
-)
+a <- VlnPlot(doub, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"),  ncol=6)
+b <- VlnPlot(nodoub, features = c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG"), ncol=6)
 
-# Compute purity of metacells
-MC$purity <- supercell_purity(
-  clusters = ref.copy$functional.cluster,
-  supercell_membership = MC$membership, 
-  method = "max_proportion"
-)
+a / b
+```
 
-# Metacell purity distribution
-hist(MC$purity)
+Smooth expression values, to mitigate sparsity
+```{r fig.width=4}
+genes <- c("CD3E","TRAC","CD8A","CD8B","CD4","CD40LG")
 
-supercell_plot(
-  MC$graph.supercells, 
-  group = MC$functional.cluster, 
-  seed = 1, 
-  alpha = -pi/2,
-  main  = "Metacells colored by subtype"
-)
+expr <- Seurat::GetAssayData(ref.copy2, assay="RNA", slot="data")[genes,]
+expr <- t(as.matrix(expr))
+ref.copy2 <- AddMetaData(ref.copy2, metadata=as.data.frame(expr))
 
-#Make a Seurat object
-ref.coarse <- supercell_2_Seurat(
-  SC.GE = MC.ge, 
-  SC = MC, 
-  fields = c("functional.cluster", "purity"),
-  var.genes = MC$genes.use,
-  N.comp = npcs
-)
+ref.copy2 <- SmoothKNN(ref.copy2, signature.names = genes, k=5)
 
-colnames(MC.ge.RNA) <- colnames(ref.coarse@assays$RNA@data)
-ref.coarse[["uncorrected"]] <- CreateAssayObject(data = MC.ge.RNA)
-ref.coarse <- ScaleData(ref.coarse, assay="uncorrected")
+feats <- paste0(genes, "_kNN")
+FeaturePlot(ref.copy2, features = feats, max.cutoff = 'q99', ncol=3)
 
-Idents(ref.coarse) <- "functional.cluster"
+doub <- subset(ref.copy2, subset=is.doublet==TRUE)
+nodoub <- subset(ref.copy2, subset=is.doublet==FALSE)
 
-ref.coarse <- RunUMAP(ref.coarse, dims = 1:npcs)
-DimPlot(ref.coarse)
+a <- VlnPlot(doub, features = feats,  ncol=6, pt.size = 0)
+b <- VlnPlot(nodoub, features = feats, ncol=6, pt.size = 0)
+
+a / b
 
 ```
-Heatmap of gene expression based on MetaCells
-```{r}
-heat2 <- DoHeatmap(ref.coarse, assay="uncorrected", features=genes.use, group.by = "functional.cluster")
 
-heat2 + scale_fill_gradientn(colors = c("blue", "white", "red"))
+Violin plot of marker genes
+```{r fig.height=4, fig.width=3}
+DefaultAssay(ref.copy) <- "RNA"
 
-ggsave("plots/DC_scHeatmap_topDEG.metacells.png", height=11, width=16)
+split <- SplitObject(ref.copy, split.by = "Study")
+
+genes <- c("PPP1R14A","AXL","CLEC9A","XCR1","CADM1","CD1A","CD207","CLEC10A","CD1C",
+                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
+                 "GZMB","LILRA4","TCF4","PRDM16","ACY3","ITGAX","TRAC","CD3E","CD3D","CD3G")
+
+VlnPlot(ref.copy, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+
+ggsave("plots/DC_annotated_violins.pdf", height=8, width=6)
+
+VlnPlot(split$maier, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+VlnPlot(split$qian, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+VlnPlot(split$zilionis, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+VlnPlot(split$qianlung, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+VlnPlot(split$qiancrc, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+VlnPlot(split$martin, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
+
 ```
+
+
+
 

@@ -1,5 +1,5 @@
 ---
-title: "Annotate DC reference after integration"
+title: "Characterize DC reference after integration"
 author: "Massimo Andreatta & Santiago Carmona"
 #output: html_notebook
 ---
@@ -10,10 +10,6 @@ renv::restore()
 
 Libraries
 ```{r}
-#remotes::install_github('carmonalab/UCell')
-#remotes::install_github('carmonalab/STACAS')
-#remotes::install_github('carmonalab/ProjecTILs')
-
 library(ggplot2)
 library(Seurat)
 library(tidyr)
@@ -29,7 +25,7 @@ Read in integrated reference
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
-ref <- readRDS(paste0(pdir,"/DC_reference_v0.1.rds"))
+ref <- readRDS(paste0(pdir,"/DC_human_ref_v1.rds"))
 palette <- ref@misc$atlas.palette
 
 DimPlot(ref, cols = palette, label=T) + theme(aspect.ratio = 1)
@@ -107,16 +103,8 @@ genes <- c("CLEC9A","XCR1","CADM1","CLEC10A","FCGR2A","FCER1A","CD1C","CD1A","CD
 VlnPlot(ref.copy, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
 
 ggsave("plots/DC_annotated_violins.pdf", height=8, width=6)
-
-#split <- SplitObject(ref.copy, split.by = "Study")
-#VlnPlot(split$maier, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-#VlnPlot(split$qian, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-#VlnPlot(split$zilionis, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-#VlnPlot(split$qianlung, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-#VlnPlot(split$qiancrc, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-#VlnPlot(split$martin, features = genes, stack = TRUE, cols = palette, flip = TRUE, fill.by = "ident")
-
 ```
+
 Try with gene expression smoothing
 ```{r fig.height=5, fig.width=3}
 obj <- ref.copy

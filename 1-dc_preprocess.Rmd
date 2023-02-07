@@ -1,5 +1,5 @@
 ---
-title: "Load all datasets in Gerhard et al. metanalysis, and convert to Seurat"
+title: "Load and pre-process all datasets in Gerhard et al. metanalysis"
 author: "Massimo Andreatta & Santiago Carmona"
 #output: html_notebook
 ---
@@ -10,9 +10,6 @@ renv::restore()
 
 Libraries
 ```{r}
-#remotes::install_github('carmonalab/UCell')
-#remotes::install_github('carmonalab/scGate')
-
 library(ggplot2)
 library(Seurat)
 library(tidyr)
@@ -24,21 +21,22 @@ library(UCell)
 library(scGate)
 ```
 
-Standardize gene symbols in expression matrix
+# Preprocessing and data conversion
+
+NB: for conversion between Scanpy format to matrix files, see export_data.py script
+
+Read in count data for individual studies, standardize gene symbols, and store into a Seurat object for further processing.
+
+Direct link to count matrices: https://www.dropbox.com/s/agr2r48723h44k8/exported.zip?dl=0
+Direct link to pre-processed data: https://www.dropbox.com/s/uz590gzx4s36tdi/Gerhard_metanalysis_seuratlist.rds?dl=0
+
 ```{r}
-geneRef_file <- "aux/EnsemblGenes105_Hsa_GRCh38.p13.txt.gz"
-
-geneRef <- data.table::fread(geneRef_file)
-```
-
-#NB: for conversion between Scanpy format to matrix files, see export_data.py script
-
-Read in data for individual studies
-```{r}
-#Data on dropbox, also direct link: https://www.dropbox.com/s/uz590gzx4s36tdi/Gerhard_metanalysis_seuratlist.rds?dl=0 
-
+#Change to your working directories
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 ddir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM/exported"
+
+geneRef_file <- "aux/EnsemblGenes105_Hsa_GRCh38.p13.txt.gz"
+geneRef <- data.table::fread(geneRef_file)
 
 studies <- list.dirs(path=ddir, full.names = FALSE)
 studies <- studies[nchar(studies)>0]
@@ -84,41 +82,12 @@ for (i in seq_along(studies)) {
 }
 
 ##And save the list of object to disk
-
-#saveRDS(seurat.list, file="Gerhard_metanalysis_seuratlist.rds")
 saveRDS(seurat.list, file=sprintf("%s/Gerhard_metanalysis_seuratlist.rds",pdir))
 ```
 
-Data in counts slot appear to be already normalized?
+Data were normalized using total-count normalization (https://www.sciencedirect.com/science/article/pii/S0092867415005000#app3). log1p normalization from NormalizeData should reverse the dataset-specific normalization factor.
 
-```{r}
-lapply(seurat.list, function(x) {
-  c <- colSums(x@assays$RNA@counts)
-  head(c)
-})
-
-#Normalized, but not log-normalized
-
-a <- qplot(seurat.list[[1]]@assays$RNA@counts["XCR1",], geom="histogram", bins=30, main="XCR1") + theme_bw()
-b <- qplot(seurat.list[[1]]@assays$RNA@counts["CCR7",], geom="histogram", bins=30, main="CCR7") + theme_bw()
-c <- qplot(seurat.list[[1]]@assays$RNA@counts["CD74",], geom="histogram", bins=30, main="CD74") + theme_bw()
-
-a | b | c
-
-ggsave("plots/raw_data_distribution.pdf", height=4, width=14)
-```
-
-Data were normalized using total-count normalization (https://www.sciencedirect.com/science/article/pii/S0092867415005000#app3). We can try to reverse the normalization
-
-But not all datasets contain the original 'nUMI' to allow recovering the original counts.
-```{r}
-M_i = seurat.list$qian$nUMI
-M_ave = mean(M_i)
-counts <- seurat.list$qian@assays$RNA@data * M_i / M_ave
-```
-
-
-Basic exploration of data
+# Basic exploration of data
 ```{r}
 plots <- list()
 
@@ -128,12 +97,7 @@ for (i in seq_along(seurat.list)) {
   
   obj <- seurat.list[[s]]
 
-  #NB: log1p normalization from NormalizeData should reverse the dataset-specific normalization factor
   obj <- NormalizeData(obj)
-  
-  #Data were already normalized, but not log-transformed. Only apply log.
-#  obj@assays$RNA@data <- log1p(obj@assays$RNA@counts)
-  
   obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
   obj <- ScaleData(obj, do.scale = TRUE, do.center = TRUE, verbose = F) 
   obj <- RunPCA(object = obj, features = obj@assays$RNA@var.features, npcs = ndim, verbose = F)
@@ -151,13 +115,12 @@ ggsave("plots/Gerhard_sets_unsup_umap.pdf", width = 24, height=15)
 ```
 
 
-#Focus on DCs only
+Focus on DCs only
 ```{r}
 lapply(seurat.list, function(x) {unique(x$state)})
 
 # brownSpleen, martin, qian, qianbc, qiancrc, qianlung, qianovarian are focused on DCs only
-
-# for the rest, subset on DCs
+# for the rest, subset on DC subsets according to author annotations
 
 dc.seurat <- seurat.list
 
@@ -185,19 +148,14 @@ dc.seurat$zilionis <- subset(dc.seurat$zilionis, subset=state %in% c("zi-tMonoDC
 saveRDS(dc.seurat, file=sprintf("%s/Gerhard_metanalysis_seuratlist.DC.rds",pdir))
 ```
 
-Basic exploration of data
+See original DC annotations from the different studies
 ```{r}
 plots <- list()
 
 ndim=15
 for (s in names(dc.seurat)) {
   
-  #NB: log1p normalization from NormalizeData should reverse the dataset-specific normalization factor
   dc.seurat[[s]] <- NormalizeData(dc.seurat[[s]])
-  
-  #Data were already normalized, but not log-transformed. Only apply log.
-#  dc.seurat[[s]]@assays$RNA@data <- log1p(dc.seurat[[s]]@assays$RNA@counts)
-  
   dc.seurat[[s]] <- FindVariableFeatures(dc.seurat[[s]], selection.method = "vst", nfeatures = 500, verbose = FALSE)
   dc.seurat[[s]] <- ScaleData(dc.seurat[[s]], verbose = F) |> RunPCA(npcs = ndim, verbose=F)
   
@@ -215,47 +173,16 @@ wrap_plots(plots, ncol=4)
 ggsave("plots/Gerhard_sets_unsup_DC.pdf", width = 16, height=12)
 ```
 
-
-```{r fig.height=3}
-table(dc.seurat$zilionis$Patient)
-a <- DimPlot(dc.seurat$zilionis, reduction="umap", group.by = "Patient") + theme(aspect.ratio = 1)
-b <- DimPlot(dc.seurat$zilionis, reduction="umap", group.by = "state") + theme(aspect.ratio = 1)
-
-a | b
-```
-
-```{r}
-dset <- "brownSpleen"
-#cDC1
-FeaturePlot(dc.seurat[[dset]], features=c("CLEC9A","XCR1","BATF3","C1orf54"))
-FeaturePlot(dc.seurat[[dset]], features=c("CPNE3","CPVL","CADM1","WDFY4"))
-
-#cDC2
-FeaturePlot(dc.seurat[[dset]], features=c("CD1C","SIRPA","ITGAM","CD207"))
-FeaturePlot(dc.seurat[[dset]], features=c("CLEC10A","AIF1","FCER1A","CD1A"))
-#DC3
-FeaturePlot(dc.seurat[[dset]], features=c("CCR7","LAMP3","FSCN1","BIRC3"))
-#pDC
-FeaturePlot(dc.seurat[[dset]], features=c("IRF7","PLAC8","LILRA4","TCF4"))
-FeaturePlot(dc.seurat[[dset]], features=c("IRF7","GZMB","IL3RA","IRF8"))
-#MonoDC
-FeaturePlot(dc.seurat[[dset]], features=c("S100A9","S100A8","FCN1","VCAN"))
-
-FeaturePlot(dc.seurat[[dset]], features=c("nFeature_RNA","nCount_RNA","percent.ribo","percent.mito"))
-
-```
+# scGate DC subtype models
 
 Can we build simple signatures based on marker genes?
 ```{r}
 sigs <- list()
 
 sigs$cDC1 <- c("CLEC9A","XCR1","BATF3","CADM1")
-sigs$cDC2_ <- c("FCER1A","CD1C","CLEC10A","FCGR2A")
+sigs$cDC2 <- c("CD1C","CLEC10A","FCGR2A","FCER1A")
 sigs$DC3 <- c("LAMP3","CCR7","FSCN1")
-sigs$pDC <- c("IRF7","LILRA4","TCF4")
-
-
-#sigs$cDC2 <- c("CD207","CD1C","CLEC10A","FCGR2A","S100A9-","S100A8-","FCN1-","VCAN-")
+sigs$pDC <- c("GZMB","LILRA4","TCF4")
 #sigs$MoDC <- c("S100A9","S100A8","FCN1","VCAN")
 
 dc.seurat <- lapply(dc.seurat, function(x) {
@@ -264,13 +191,14 @@ dc.seurat <- lapply(dc.seurat, function(x) {
 })
 ```
 
-```{r fig.height=4}
+```{r fig.height=3}
 for (s in names(dc.seurat)) {
   p <- FeaturePlot(dc.seurat[[s]], features=paste0(names(sigs),"_kNN"))
   plot(p)
 }
 ```
-Try assigning labels based on scGate (simple models)
+
+Assign labels based on scGate (simple models based on a few genes)
 ```{r}
 ss <- list()
 ss$cDC1 <- gating_model(name="cDC1", signature = sigs$cDC1)
@@ -301,7 +229,7 @@ wrap_plots(pll, ncol = 2)
 ggsave("plots/Gerhard_sets_scGate_multi.pdf", height=32, width=11)
 ```
 
-Save - with annotations
+Save DC datasets - with scGate annotations
 ```{r}
 saveRDS(dc.seurat, file=sprintf("%s/Gerhard_metanalysis_seuratlist.DC.anno.rds",pdir))
 ```

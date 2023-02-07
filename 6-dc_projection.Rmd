@@ -1,5 +1,5 @@
 ---
-title: "Integrate DC datasets - exclude T cell doublets"
+title: "Test reference-based analysis using the DC map"
 author: "Massimo Andreatta & Santiago Carmona"
 #output: html_notebook
 ---
@@ -24,7 +24,7 @@ library(ProjecTILs)
 Read in annotated reference map
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
-ref <- readRDS(paste0(pdir,"/DC_reference_v0.1.rds"))
+ref <- readRDS(paste0(pdir,"/DC_human_ref_v1.rds"))
 ```
 
 

@@ -10,9 +10,7 @@ renv::restore()
 
 Libraries
 ```{r}
-#remotes::install_github('carmonalab/UCell')
 #remotes::install_github('carmonalab/STACAS')
-#remotes::install_github('carmonalab/scGate', ref='dev')
 #remotes::install_github('carmonalab/ProjecTILs')
 
 library(ggplot2)
@@ -26,7 +24,7 @@ library(UCell)
 library(STACAS)
 ```
 
-Read in pre-integrated object (see dc_integrate.Rmd)
+Read in pre-integrated object (see 2-dc_integrate.Rmd)
 ```{r}
 ref.init <- readRDS("aux/DC_reference_wTcells.rds")
 
@@ -93,7 +91,7 @@ ref.init$pre.label[ref.init$functional.cluster%in% c("cDC2_CD1A","cDC2_CLEC10A")
 table(ref.init$pre.label, useNA = "ifany")
 ```
 
-Re-integrate using the semi-supervised assignement
+# Re-integrate with semi-supervised STACAS, using previous labels as a guide
 
 Find anchors, guided by initial functional.cluster assignment
 ```{r}
@@ -152,7 +150,7 @@ p4 <- DimPlot(object_integrated, reduction="umap", group.by="functional.cluster"
 (p1 | p2) / (p3 | p4)
 ```
 
-Recluster?
+Recalculate clusters
 ```{r}
 k.param <- 20
 res <- 0.2
@@ -186,7 +184,9 @@ Remove contaminants - IGs, erythrocytes, ...
 ```{r}
 ref.init <- subset(object_integrated, subset=seurat_clusters %in% c(8,9,10), invert=T)
 table(ref.init$pre.label)
+```
 
+```{r}
 #Find anchors, guided by initial functional.cluster assignment
 DefaultAssay(ref.init) <- "RNA"
 seurat.list <- SplitObject(ref.init, split.by = "Study")
@@ -254,7 +254,7 @@ DimPlot(ref, group.by = "functional.cluster", label = TRUE, cols = palette) + th
 ggsave("plots/DC_reference.pdf", height=5, width=7)
 ```
 
-Recluster?
+Re-cluster
 ```{r}
 k.param <- 20
 res <- 0.15
@@ -266,6 +266,7 @@ ref <- FindClusters(ref, resolution = res, graph.name = "integrated_snn")
 DimPlot(ref, reduction = "umap", group.by="seurat_clusters") + theme(aspect.ratio = 1)
 
 ```
+
 ```{r}
 Idents(ref) <- "seurat_clusters"
 DefaultAssay(ref) <- "RNA"
@@ -302,6 +303,7 @@ Idents(ref) <- "functional.cluster"
 
 DimPlot(ref, group.by = "functional.cluster", cols = ref@misc$atlas.palette, label=TRUE)
 ```
+
 Add scGate model for filtering
 ```{r}
 library(scGate)
@@ -321,22 +323,27 @@ ref@meta.data <- ref@meta.data[,c("orig.ident","Study","nCount_RNA","nFeature_RN
 ref@misc$projecTILs <- "DC_human"
 ```
 
+
+
 Save reference object
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
 
-saveRDS(ref, "aux/DC_reference_v0.1.rds")
-saveRDS(ref, paste0(pdir,"/DC_reference_v0.1.rds"))
+saveRDS(ref, "aux/DC_human_ref_v1.rds")
+saveRDS(ref, paste0(pdir,"/DC_human_ref_v1.rds"))
 ```
 
-Make a downsampled version for SPICA
+
+Make a down-sampled version for SPICA
 ```{r}
 sdir <- "~/Dropbox/CSI/SPICA_atlases"
 
-spica.ref <- subset(ref, downsample=2000)
+Idents(ref) <- "functional.cluster"
+spica.ref <- subset(ref, downsample=2000)  #max 2000 cells per subtype
 spica.ref <- DietSeurat(spica.ref, counts=FALSE, data=TRUE, dimreducs = c("pca","umap"))
 
 DimPlot(spica.ref, cols = spica.ref@misc$atlas.palette)
+table(spica.ref$functional.cluster)
 
-saveRDS(spica.ref, paste0(sdir,"/DC_reference_v0.1.SPICA.rds"))
+saveRDS(spica.ref, paste0(sdir,"/DC_human_ref_v1_light.rds"))
 ```

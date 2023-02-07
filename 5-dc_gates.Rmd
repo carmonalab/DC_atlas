@@ -26,7 +26,8 @@ library(scGate)
 
 
 # Read in data
-Prepared using `dc_analysis.Rmd` script
+
+Prepared using `1-dc_preprocess.Rmd` script
 
 ```{r}
 pdir <- "~/Dropbox/CSI/Datasets/Gerhard_JEM"
