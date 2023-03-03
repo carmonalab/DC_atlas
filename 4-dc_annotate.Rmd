@@ -136,7 +136,7 @@ ggplot(df, aes(x = Study, y = Frequency,
             fill = Subtype)) + geom_bar(stat = "identity") + 
             theme_bw() + scale_fill_manual(values = palette) +
             theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-ggsave("plots/DC_composition_by_dataset.pdf", height=4, width=5)
+ggsave("plots/DC_composition_by_dataset.pdf", height=5.5, width=8)
 ```
 
 Make a subset vs. study heatmap of pseudobulk profiles

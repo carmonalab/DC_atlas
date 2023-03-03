@@ -1,0 +1,195 @@
+---
+title: "Integrate DC datasets"
+author: "Massimo Andreatta & Santiago Carmona"
+#output: html_notebook
+---
+
+```{r}
+renv::restore()
+```
+
+Libraries
+```{r}
+#remotes::install_github('carmonalab/STACAS')
+#remotes::install_github('carmonalab/scIntegrationMetrics')
+
+library(ggplot2)
+library(Seurat)
+library(tidyr)
+library(SeuratObject)
+library(Matrix)
+library(patchwork)
+library(remotes)
+library(UCell)
+library(STACAS)
+library(scIntegrationMetrics)
+```
+
+Read in objects for uncorrected, unsupervised and semi-sup integration
+```{r}
+merged <- readRDS("aux/DC_unintegrated.rds")
+
+ref.unsup <- readRDS("aux/DC_reference_wTcells.rds")
+
+ref.sup <- readRDS("aux/DC_reference_2nd_wmeta.rds")
+```
+
+
+```{r fig.height=2, fig.width=5}
+a <- DimPlot(merged, group.by = "common.name") + NoLegend() + theme(aspect.ratio = 1)
+b <- DimPlot(ref.unsup, group.by = "common.name") + NoLegend() + theme(aspect.ratio = 1)
+c <- DimPlot(ref.sup, group.by = "common.name") + theme(aspect.ratio = 1)
+a | b | c
+```
+
+Subset on same cells (doublets and contaminants were removed on final iteration)
+```{r}
+cells <- colnames(ref.sup)
+merged <- subset(merged, cells=cells)
+ref.unsup <- subset(ref.unsup, cells=cells)
+```
+
+Calculate integration metrics based on annotations by Gerhard et al.
+```{r}
+#Integration metrics on uncorrected data
+integrationMetrics <- list()
+
+metricsLabels <- c("cDC1","cDC2/MoDC","DC3","pDC")  #cannot evaluate AS-DC, as they are only annotated in one dataset
+
+integrationMetrics[["Uncorrected"]] <- getIntegrationMetrics(object=merged,
+                                                      meta.label = "common.name",
+                                                      meta.batch = "Study",
+                                                      metricsLabels = metricsLabels)
+
+integrationMetrics[["Unsupervised"]] <- getIntegrationMetrics(object=ref.unsup,
+                                                      meta.label = "common.name",
+                                                      meta.batch = "Study",
+                                                      metricsLabels = metricsLabels)
+
+integrationMetrics[["Semi-supervised"]] <- getIntegrationMetrics(object=ref.sup,
+                                                      meta.label = "common.name",
+                                                      meta.batch = "Study",
+                                                      metricsLabels = metricsLabels)
+```
+
+Combine integration metrics
+```{r fig.height=3}
+integrationMetricsSummary <- data.frame(unlist(integrationMetrics)) %>%
+  tibble::rownames_to_column() %>%
+  dplyr::rename(value=unlist.integrationMetrics.) %>%
+  separate(rowname, c("Method","Metric"), sep="\\.")
+
+
+integrationMetricsSummary$Method <- factor(integrationMetricsSummary$Method,
+                                           levels=c("Uncorrected","Unsupervised","Semi-supervised"))
+
+ggplot(integrationMetricsSummary, aes(x=Method, y=value, fill=Method)) + geom_bar(stat="identity") + 
+    theme_bw()  +
+    theme(legend.position="none",
+          axis.text.x=element_text(angle = 45, vjust = 1, hjust=1)) +
+    xlab("Method") + facet_wrap(~Metric, scales = "free") +
+    scale_fill_brewer(palette="Set1")
+```
+
+
+Scatterplot of two performance metrics
+```{r fig.width=4, fig.height=1.5}
+palette <- brewer.pal(n=length(unique(integrationMetricsSummary$Method)), name = "Set1")
+
+a <- integrationMetricsSummary %>% dplyr::filter(Metric %in% c("celltype_ASW","CiLISI")) %>%
+  pivot_wider(names_from = Metric, values_from = value ) %>%
+  ggplot(aes(x=CiLISI, y=`celltype_ASW`, label=Method)) +
+  geom_point(aes(color=Method), size=2) + geom_text(hjust=0.1, vjust=0) + 
+  scale_color_manual(values = palette) + theme_light()
+
+b <- integrationMetricsSummary %>% dplyr::filter(Metric %in% c("norm_cLISI","CiLISI")) %>%
+  pivot_wider(names_from = Metric, values_from = value ) %>%
+  ggplot(aes(x=CiLISI, y=`norm_cLISI`, label=Method)) +
+  geom_point(aes(color=Method), size=2) + geom_text(hjust=0.1, vjust=0) + 
+  scale_color_manual(values = palette) + theme_light()
+
+a | b
+
+ggsave("plots/DC_metrics_scatterplot.pdf", height=3, width=10)
+```
+
+# Metric on expert-curated labels
+```{r}
+not.doublets <- colnames(ref.unsup)[ref.unsup$functional.cluster != "Tcell_doublets"]
+
+merged <- subset(merged, cells=not.doublets)
+ref.unsup <- subset(ref.unsup, cells=not.doublets)
+ref.sup <- subset(ref.sup, cells=not.doublets)
+
+labels <- as.character(ref.unsup$functional.cluster)
+names(labels) <- colnames(ref.unsup)
+
+merged$expert.labels <- NA
+merged$expert.labels[names(labels)] <- labels
+
+ref.unsup$expert.labels <- NA
+ref.unsup$expert.labels[names(labels)] <- labels
+
+ref.sup$expert.labels <- NA
+ref.sup$expert.labels[names(labels)] <- labels
+
+```
+
+
+```{r}
+#Integration metrics on uncorrected data
+integrationMetrics <- list()
+
+metricsLabels <- NULL  #use all clusters
+
+integrationMetrics[["Uncorrected"]] <- getIntegrationMetrics(object=merged,
+                                                      meta.label = "expert.labels",
+                                                      meta.batch = "Study",
+                                                      metricsLabels = metricsLabels)
+
+integrationMetrics[["Unsupervised"]] <- getIntegrationMetrics(object=ref.unsup,
+                                                      meta.label = "expert.labels",
+                                                      meta.batch = "Study",
+                                                      metricsLabels = metricsLabels)
+
+integrationMetrics[["Semi-supervised"]] <- getIntegrationMetrics(object=ref.sup,
+                                                      meta.label = "expert.labels",
+                                                      meta.batch = "Study",
+                                                      metricsLabels = metricsLabels)
+
+integrationMetricsSummary <- data.frame(unlist(integrationMetrics)) %>%
+  tibble::rownames_to_column() %>%
+  dplyr::rename(value=unlist.integrationMetrics.) %>%
+  separate(rowname, c("Method","Metric"), sep="\\.")
+
+
+integrationMetricsSummary$Method <- factor(integrationMetricsSummary$Method,
+                                           levels=c("Uncorrected","Unsupervised","Semi-supervised"))
+
+ggplot(integrationMetricsSummary, aes(x=Method, y=value, fill=Method)) + geom_bar(stat="identity") + 
+    theme_bw()  +
+    theme(legend.position="none",
+          axis.text.x=element_text(angle = 45, vjust = 1, hjust=1)) +
+    xlab("Method") + facet_wrap(~Metric, scales = "free") +
+    scale_fill_brewer(palette="Set1")
+```
+Scatterplot of two performance metrics
+```{r fig.width=4, fig.height=1.5}
+palette <- brewer.pal(n=length(unique(integrationMetricsSummary$Method)), name = "Set1")
+
+a <- integrationMetricsSummary %>% dplyr::filter(Metric %in% c("celltype_ASW","CiLISI")) %>%
+  pivot_wider(names_from = Metric, values_from = value ) %>%
+  ggplot(aes(x=CiLISI, y=`celltype_ASW`, label=Method)) +
+  geom_point(aes(color=Method), size=2) + geom_text(hjust=0.1, vjust=0) + 
+  scale_color_manual(values = palette) + theme_light()
+
+b <- integrationMetricsSummary %>% dplyr::filter(Metric %in% c("norm_cLISI","CiLISI")) %>%
+  pivot_wider(names_from = Metric, values_from = value ) %>%
+  ggplot(aes(x=CiLISI, y=`norm_cLISI`, label=Method)) +
+  geom_point(aes(color=Method), size=2) + geom_text(hjust=0.1, vjust=0) + 
+  scale_color_manual(values = palette) + theme_light()
+
+a | b
+
+ggsave("plots/DC_metrics_scatterplot_expertAnnotation.pdf", height=3, width=10)
+```

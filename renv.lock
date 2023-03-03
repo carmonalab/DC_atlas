@@ -1895,6 +1895,14 @@
       "Hash": "11359a5bb73622ab3f4136bf57108b64",
       "Requirements": []
     },
+    "permute": {
+      "Package": "permute",
+      "Version": "0.9-7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "abf0ca85c1c752e0d04f46334e635046",
+      "Requirements": []
+    },
     "pheatmap": {
       "Package": "pheatmap",
       "Version": "1.0.12",
@@ -2242,6 +2250,26 @@
         "ggridges",
         "patchwork",
         "reshape2"
+      ]
+    },
+    "scIntegrationMetrics": {
+      "Package": "scIntegrationMetrics",
+      "Version": "0.3",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "scIntegrationMetrics",
+      "RemoteUsername": "carmonalab",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "a56e50435d8d567d9b5b7403b2907694bdd5dd87",
+      "Hash": "a377349366f82aacb85f8ae56d57829e",
+      "Requirements": [
+        "RANN",
+        "Rcpp",
+        "RcppArmadillo",
+        "cluster",
+        "ggplot2",
+        "vegan"
       ]
     },
     "scRNAseq": {
@@ -2614,6 +2642,20 @@
         "cli",
         "glue",
         "rlang"
+      ]
+    },
+    "vegan": {
+      "Package": "vegan",
+      "Version": "2.6-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "97bfb04067dc125eb0f00fda67801898",
+      "Requirements": [
+        "MASS",
+        "cluster",
+        "lattice",
+        "mgcv",
+        "permute"
       ]
     },
     "viridisLite": {

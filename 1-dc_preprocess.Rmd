@@ -148,10 +148,50 @@ dc.seurat$zilionis <- subset(dc.seurat$zilionis, subset=state %in% c("zi-tMonoDC
 saveRDS(dc.seurat, file=sprintf("%s/Gerhard_metanalysis_seuratlist.DC.rds",pdir))
 ```
 
+Assign main subtypes to common dictionary of "reference states", as defined by Gerhard et al.
+```{r}
+alt.names <- list()
+alt.names[["cDC1"]] <- c("brS-cDC1","brS-Mitotic cDC1","ma-cDC1","mi-DC1",
+                         "C1_CLEC9A","qiB-C1_CLEC9A","qiC-C1_CLEC9A","qiL-C1_CLEC9A",
+                         "qiO-C1_CLEC9A","vi-DC1", "zhH-DC-C3-CLEC9A","zi-tDC1")
+
+#alt.names[["cDC2"]] <- c("brS-CLEC10A+ cDC2","brS-CLEC10A- cDC2","brS-Mitotic cDC2",
+#                         "ma-cDC2","mi-DC2","C2_CLEC10A","qiB-C2_CLEC10A","qiB-C5_CD207",
+#                         "qiC-C2_CLEC10A","qiC-C5_CD207","qiL-C2_CLEC10A","qiL-C5_CD207",
+#                         "qiO-C2_CLEC10A","qiO-C5_CD207","vi-DC2","C5_CD207",
+#                         "zhH-DC-C1-CD1C","zhC-hM03_cDC2-CD1C","zi-tDC2")
+#alt.names[["MonoDC"]] <- c("vi-DC3","vi-DC4","zi-tMonoDC","mi-moDC")
+
+alt.names[["cDC2/MoDC"]] <- c("brS-CLEC10A+ cDC2","brS-CLEC10A- cDC2","brS-Mitotic cDC2",
+                         "ma-cDC2","mi-DC2","C2_CLEC10A","C5_CD207","qiB-C2_CLEC10A","qiB-C5_CD207",
+                         "qiC-C2_CLEC10A","qiC-C5_CD207","qiL-C2_CLEC10A","qiL-C5_CD207",
+                         "qiO-C2_CLEC10A","qiO-C5_CD207","vi-DC2",
+                         "zhH-DC-C1-CD1C","zhC-hM03_cDC2-CD1C","zi-tDC2",
+                         "vi-DC3","vi-DC4","zi-tMonoDC","mi-moDC","zhH-DC-C2-FCER1A")
+
+alt.names[["DC3"]] <- c("ma-mregDC","C3_CCR7","qiB-C3_CCR7","qiC-C3_CCR7",
+                        "qiO-C3_CCR7","qiL-C3_CCR7","zhH-DC-C4-LAMP3",
+                         "mi-Activated DC","zhC-hM04_cDC1-BATF3","zi-tDC3")
+
+alt.names[["pDC"]] <- c("mi-pDC","C4_LILRA4","qiB-C4_LILRA4","qiC-C4_LILRA4",
+                        "qiL-C4_LILRA4","qiO-C4_LILRA4","vi-DC6","zhC-hM02_pDC-LILRA4","zi-tpDC")
+
+alt.names[["AS-DC"]] <- c("vi-DC5","brS-AS DC")
+
+dc.seurat <- lapply(dc.seurat, function(x) {
+  x$common.name <- NA
+  for (n in names(alt.names)) {
+    x$common.name[x$state %in% alt.names[[n]]] <- n
+  }
+  x
+})
+
+```
+
 See original DC annotations from the different studies
 ```{r}
 plots <- list()
-
+plots.2 <- list()
 ndim=15
 for (s in names(dc.seurat)) {
   
@@ -162,12 +202,16 @@ for (s in names(dc.seurat)) {
   dc.seurat[[s]] <- RunUMAP(dc.seurat[[s]], reduction = "pca", dims = 1:ndim, seed.use=123, verbose = F)
   plots[[s]] <- DimPlot(dc.seurat[[s]], reduction = "umap", group.by = "state", label = T) + ggtitle(s) + NoLegend() +
              theme(axis.title=element_blank(),axis.text=element_blank(),axis.ticks=element_blank())
+  
+  plots.2[[s]] <- DimPlot(dc.seurat[[s]], reduction = "umap", group.by = "common.name", label = T) + ggtitle(s) + NoLegend() +
+             theme(axis.title=element_blank(),axis.text=element_blank(),axis.ticks=element_blank())
 }
 ```
 
-```{r fig.height=8, fig.width=16}
-plots <- plots[names(plots) != "brownSpleen"]
+```{r fig.height=6, fig.width=12}
+#plots <- plots[names(plots) != "brownSpleen"]
 
+wrap_plots(plots.2, ncol=4)
 wrap_plots(plots, ncol=4)
 
 ggsave("plots/Gerhard_sets_unsup_DC.pdf", width = 16, height=12)

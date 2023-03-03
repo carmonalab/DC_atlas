@@ -302,7 +302,11 @@ ref@misc$atlas.palette <- ref@misc$atlas.palette[levels(ref$functional.cluster)]
 Idents(ref) <- "functional.cluster"
 
 DimPlot(ref, group.by = "functional.cluster", cols = ref@misc$atlas.palette, label=TRUE)
+
+#Make a copy for calculating metrics
+saveRDS(ref, "aux/DC_reference_2nd_wmeta.rds")
 ```
+
 
 Add scGate model for filtering
 ```{r}
@@ -347,3 +351,5 @@ table(spica.ref$functional.cluster)
 
 saveRDS(spica.ref, paste0(sdir,"/DC_human_ref_v1_light.rds"))
 ```
+
+
