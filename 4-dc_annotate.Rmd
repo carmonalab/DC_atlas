@@ -69,6 +69,12 @@ DefaultAssay(ref) <- "integrated"
 
 ```
 
+Save marker genes to file
+```{r}
+deg <- cluster.markers |> dplyr::group_by(cluster)
+write.csv(deg, file="aux/DC_reference_markers.csv")
+```
+
 Make a heatmap of DEGs
 ```{r fig.height=4}
 ref.copy <- ref
