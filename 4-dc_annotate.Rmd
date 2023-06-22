@@ -111,6 +111,24 @@ VlnPlot(ref.copy, features = genes, stack = TRUE, cols = palette, flip = TRUE, f
 ggsave("plots/DC_annotated_violins.pdf", height=8, width=6)
 ```
 
+DotPlot visualization
+```{r fig.width=12, fig.height=4}
+ref.copy$functional.cluster <- factor(ref.copy$functional.cluster,
+                                      levels = rev(levels(ref.copy$functional.cluster)))
+Idents(ref.copy) <- "functional.cluster"
+
+genes <- c("CLEC9A","XCR1","CADM1","CLEC10A","FCGR2A","FCER1A","CD1C","CD1A","CD207",
+                 "LAMP3","CCR7", "CD274", "PDCD1LG2","FSCN1","GZMB","LILRA4","TCF4","PPP1R14A","AXL","SIGLEC6",
+           "CD14","CD163","S100A8","S100A9","VCAN","FCN1")
+
+
+DotPlot(ref.copy, features = genes, cols="RdBu", scale=T, col.max=1.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ggsave("plots/DC_ref_dotplot.pdf", height=3.5, width=11)
+```
+
+
 Try with gene expression smoothing
 ```{r fig.height=5, fig.width=3}
 obj <- ref.copy
