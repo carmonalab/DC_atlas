@@ -1,0 +1,313 @@
+
+# Install dependencies if needed
+Let's use latest version of Seurat and ProjecT
+
+## General packages
+```{r}
+gen.pck <- c("Seurat", "remotes", "BiocManager",
+             "dplyr", "tidyr", "tibble", "ggplot2")
+
+sapply(gen.pck,
+       function(p){
+         if(!require(p, character.only = T)){
+           # use renv to install to keep of record of packages
+           # moreover, renv allow to install from both CRAN and bioconductor
+           renv::install(p)
+         }
+         library(p,
+                 character.only = T)
+       })
+
+```
+
+## Carmona lab packages
+Let's install dev versions for some of them, as they have some modifications we need.
+You will be prompted whether to upgrade other packages, up to you.
+
+```{r}
+# master version packages
+csi.pck <- c("SignatuR", "UCell", "STACAS", "scGate")
+
+sapply(csi.pck,
+       function(p){
+         if(!require(p, character.only = T)){
+           # install from github
+           remotes::install_github(paste0("carmonalab/", p))
+         }
+         library(p,
+                 character.only = T)
+       })
+
+csi.pck <- c("ProjecTILs")
+
+sapply(csi.pck,
+       function(p){
+         if(!require(p, character.only = T)){
+           # install from github, dev version
+           remotes::install_github(paste0("carmonalab/", p),
+                                   ref = "dev")
+         }
+         library(p,
+                 character.only = T)
+       })
+```
+
+# Load previous DC reference map
+```{r}
+path_ref <- "~/Dropbox/CSI/reference_atlases" 
+DC = ProjecTILs::load.reference.map(file.path(path_ref, "DC_human_ref_v1.rds"))
+```
+
+```{r}
+up <- UMAPPlot(DC) + NoAxes()
+```
+
+
+Count of each celltype
+```{r}
+p1 <- DC@meta.data %>% 
+        count(functional.cluster) %>% 
+        mutate(freq = n/sum(n)) %>% 
+        ggplot(aes(functional.cluster, freq,
+                   fill = functional.cluster)) +
+        ylim(c(0,0.6)) +
+        geom_col(show.legend = F) +
+        labs(y = "Relative proportions of DC subtypes") +
+        scale_fill_manual(values = DC@misc$atlas.palette) +
+        theme_bw()
+
+all <- DC@meta.data %>% 
+        count(functional.cluster, Study) %>% 
+        group_by(Study) %>%
+        mutate(freq = n/sum(n)) %>%
+        ggplot(aes(Study, freq, fill = functional.cluster)) +
+        geom_col() +
+        scale_fill_manual(values = DC@misc$atlas.palette) +
+        labs(y = "Proportion of cells") +
+        theme_bw()
+
+allp <- DC@meta.data %>% 
+        count(functional.cluster, Study) %>% 
+        group_by(functional.cluster) %>%
+        mutate(freq = n/sum(n)) %>%
+        ggplot(aes(functional.cluster, freq, fill = Study)) +
+        geom_col() +
+        labs(y = "Proportion of cells") +
+        theme_bw()
+
+```
+
+# Remove half of cDC2_CLEC10A
+Remove randomly half of this cell type
+```{r}
+ctype <- "cDC2_CLEC10A"
+# vector of all cells
+allcl <- Cells(DC)
+
+# vector of cDC2_CLEC1A
+cl <- Cells(DC[, DC$functional.cluster == ctype])
+
+#fix seed
+set.seed(22)
+
+# randomly peak of these cell types that will be removed
+cl_subset <- sample(cl,
+                    size = ceiling(length(cl)/1.5),
+                    replace = F)
+keep <- allcl[!allcl %in% cl_subset]
+DC2 <- subset(DC, cells = keep)
+```
+
+## UMAPS
+```{r}
+up2 <- UMAPPlot(DC2) + NoAxes()
+```
+
+### Recalculate refmap
+```{r}
+# keep parameters of old version
+DC2 <- make.reference(DC2,
+                      assay = "integrated",
+                      atlas.name = "DC_human_v2",
+                      ndim = 40,
+                      nfeatures = 2000,
+                      recalculate.umap = T,
+                      scGate.model.human = DC@misc$scGate$human,
+                      scGate.model.mouse = DC@misc$scGate$mouse,
+                      layer1_link = "CL:0000451")
+```
+
+```{r}
+up3 <- UMAPPlot(DC2) + NoAxes()
+```
+
+Count of each celltype
+```{r}
+p1 <- DC2@meta.data %>% 
+        count(functional.cluster) %>% 
+        mutate(freq = n/sum(n)) %>% 
+        ggplot(aes(functional.cluster, freq,
+                   fill = functional.cluster)) +
+        geom_col(show.legend = F) +
+        ylim(c(0,0.6)) +
+        labs(y = "Relative proportions of DC subtypes") +
+        scale_fill_manual(values = DC@misc$atlas.palette) +
+        theme_bw()
+
+all <- DC2@meta.data %>% 
+        count(functional.cluster, Study) %>% 
+        group_by(Study) %>%
+        mutate(freq = n/sum(n)) %>%
+        ggplot(aes(Study, n, fill = functional.cluster)) +
+        geom_col() +
+        scale_fill_manual(values = DC@misc$atlas.palette) +
+        labs(y = "Number of cells") +
+        theme_bw()
+
+allp <- DC2@meta.data %>% 
+        count(functional.cluster, Study) %>% 
+        group_by(functional.cluster) %>%
+        mutate(freq = n/sum(n)) %>%
+        ggplot(aes(functional.cluster, freq, fill = Study)) +
+        geom_col() +
+        labs(y = "Proportion of cells") +
+        theme_bw()
+
+```
+
+# Split MonoDC
+```{r}
+monoDC <- DC[,DC$functional.cluster == "MonoDC"]
+
+UMAPPlot(monoDC)
+```
+
+## Recompute space
+
+```{r}
+var.features = 2000
+ndim = 40
+vars.regress = c("percent.mito", "nFeature_RNA")
+
+monoDC <- monoDC %>% 
+        # FindVariableFeatures(selection.method = "vst",
+        #                      nfeatures = var.features,
+        #                      verbose = F) %>% 
+        # ScaleData(vars.to.regress = vars.regress,
+        #           assay = "integrated") %>% 
+        RunPCA(npcs=ndim,
+               verbose = F) %>% 
+        RunUMAP(reduction = "pca",
+                dims = 1:ndim,
+                verbose = F)
+
+upp <- UMAPPlot(monoDC)
+upp
+```
+
+## Cluster
+```{r}
+monoDC <- FindNeighbors(monoDC,
+                        dims = 1:20)
+monoDC <- FindClusters(monoDC,
+                       resolution = 0.1)
+monoDC$clus <- factor(monoDC$seurat_clusters,
+                      levels = c(0,1),
+                      labels = c("MonoDC_CD14", "MonoDC_CD16"))
+
+(upcl <- UMAPPlot(monoDC,
+                  group.by = "clus") +
+        ggtitle("MonoDC"))
+```
+
+## Feature plot
+```{r}
+feats <- c("CD14", "CD1C", "THBD", "FCGR3A",
+           "SERPINA1", "FTL", "IFITM3", "CSF1R",
+           "CLEC10A", "FCER1A")
+DefaultAssay(monoDC) <- "RNA"
+fpl <- FeaturePlot(monoDC,
+                   features = feats)
+fpl
+```
+
+```{r}
+vln <- VlnPlot(monoDC,
+               features = feats,
+               group.by = "clus",
+               stack = T, flip = T) +
+        NoLegend()
+```
+
+
+
+
+
+
+
+# Rename cell types
+```{r}
+MonoDC_CD14 <- Cells(monoDC[, monoDC$clus == "MonoDC_CD14"])
+MonoDC_CD16 <- Cells(monoDC[, monoDC$clus == "MonoDC_CD16"])
+
+DC2@meta.data <- DC2@meta.data %>% 
+        rownames_to_column("id") %>% 
+        rowwise() %>% 
+        mutate(functional.cluster = as.character(functional.cluster),
+               functional.cluster = ifelse(id %in% MonoDC_CD14,
+                                           "MonoDC_CD14",
+                                           ifelse(id %in% MonoDC_CD16,
+                                           "MonoDC_CD16",
+                                           ifelse(functional.cluster == "DC3",
+                                                  "cDC_LAMP3_CCR7",
+                                                  functional.cluster
+                                                  )
+                                           )
+                                           )
+               ) %>% 
+        ungroup() %>% 
+        column_to_rownames("id")    
+```
+
+## Make reference map
+```{r}
+pal <- c(DC@misc$atlas.palette[-7],
+         "MonoDC_CD14" = "#E31A1C",
+         
+         "#1F78B4"
+         
+# keep parameters of old version
+DC2 <- make.reference(DC2,
+                      assay = "integrated",
+                      atlas.name = "DC_human_v2",
+                      ndim = 40,
+                      nfeatures = 2000,
+                      recalculate.umap = T,
+                      scGate.model.human = DC@misc$scGate$human,
+                      scGate.model.mouse = DC@misc$scGate$mouse,
+                      layer1_link = "CL:0000451")
+```
+
+```{r}
+upfi <- UMAPPlot(DC2)
+upfi
+```
+
+Count of each celltype
+```{r}
+p1 <- DC2@meta.data %>% 
+        count(functional.cluster) %>% 
+        mutate(freq = n/sum(n)) %>% 
+        ggplot(aes(functional.cluster, freq,
+                   fill = functional.cluster)) +
+        geom_col(show.legend = F) +
+        labs(y = "Relative proportions of DC subtypes") +
+        theme_bw() +
+        theme(axis.text.x = element_text(angle = 45,
+                                         hjust = 1, 
+                                         vjust = 1))
+
+```
+
+
+
