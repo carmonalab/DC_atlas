@@ -38,7 +38,7 @@ sapply(csi.pck,
                  character.only = T)
        })
 
-csi.pck <- c("ProjecTILs")
+csi.pck <- c("ProjecTILs", "HiTME")
 
 sapply(csi.pck,
        function(p){
@@ -59,7 +59,9 @@ DC = ProjecTILs::load.reference.map(file.path(path_ref, "DC_human_ref_v1.rds"))
 ```
 
 ```{r}
-up <- UMAPPlot(DC) + NoAxes()
+up <- UMAPPlot(DC,
+               cols = DC@misc$atlas.palette) + NoAxes()
+up
 ```
 
 
@@ -121,10 +123,11 @@ DC2 <- subset(DC, cells = keep)
 ## UMAPS
 ```{r}
 up2 <- UMAPPlot(DC2) + NoAxes()
+up2
 ```
 
 ### Recalculate refmap
-```{r}
+```{r, eval = F}
 # keep parameters of old version
 DC2 <- make.reference(DC2,
                       assay = "integrated",
@@ -210,10 +213,14 @@ upp
 monoDC <- FindNeighbors(monoDC,
                         dims = 1:20)
 monoDC <- FindClusters(monoDC,
-                       resolution = 0.1)
+                       resolution = 0.2)
+UMAPPlot(monoDC) 
+
 monoDC$clus <- factor(monoDC$seurat_clusters,
-                      levels = c(0,1),
-                      labels = c("MonoDC_CD14", "MonoDC_CD16"))
+                      levels = c(0,1, 2),
+                      labels = c("MonoDC_CD14",
+                                 "MonoDC_DN",
+                                 "MonoDC_CD16"))
 
 (upcl <- UMAPPlot(monoDC,
                   group.by = "clus") +
@@ -221,7 +228,7 @@ monoDC$clus <- factor(monoDC$seurat_clusters,
 ```
 
 ## Feature plot
-```{r}
+```{r, fig.height=10}
 feats <- c("CD14", "CD1C", "THBD", "FCGR3A",
            "SERPINA1", "FTL", "IFITM3", "CSF1R",
            "CLEC10A", "FCER1A")
@@ -231,12 +238,13 @@ fpl <- FeaturePlot(monoDC,
 fpl
 ```
 
-```{r}
+```{r, fig.width=4, fig.height=7}
 vln <- VlnPlot(monoDC,
                features = feats,
                group.by = "clus",
                stack = T, flip = T) +
         NoLegend()
+vln
 ```
 
 
@@ -249,6 +257,7 @@ vln <- VlnPlot(monoDC,
 ```{r}
 MonoDC_CD14 <- Cells(monoDC[, monoDC$clus == "MonoDC_CD14"])
 MonoDC_CD16 <- Cells(monoDC[, monoDC$clus == "MonoDC_CD16"])
+MonoDC_DN <- Cells(monoDC[, monoDC$clus == "MonoDC_DN"])
 
 DC2@meta.data <- DC2@meta.data %>% 
         rownames_to_column("id") %>% 
@@ -257,24 +266,42 @@ DC2@meta.data <- DC2@meta.data %>%
                functional.cluster = ifelse(id %in% MonoDC_CD14,
                                            "MonoDC_CD14",
                                            ifelse(id %in% MonoDC_CD16,
-                                           "MonoDC_CD16",
-                                           ifelse(functional.cluster == "DC3",
-                                                  "cDC_LAMP3_CCR7",
-                                                  functional.cluster
+                                                  "MonoDC_CD16",
+                                                  ifelse(id %in% MonoDC_DN,
+                                                         "MonoDC_DN",
+                                                         ifelse(functional.cluster == "DC3",
+                                                                "cDC_LAMP3_CCR7",
+                                                                functional.cluster
+                                                         )
                                                   )
                                            )
-                                           )
-               ) %>% 
+               ),
+               functional.cluster = factor(functional.cluster,
+                                           levels = c("cDC1",
+                                                      "cDC2_CLEC10A",
+                                                      "cDC2_CD1A",
+                                                      "cDC_LAMP3_CCR7",
+                                                      "pDC",
+                                                      "AS-DC",
+                                                      "MonoDC_CD14",
+                                                      "MonoDC_CD16",
+                                                      "MonoDC_DN"))
+        ) %>% 
         ungroup() %>% 
         column_to_rownames("id")    
 ```
 
 ## Make reference map
+Color palette
 ```{r}
-pal <- c(DC@misc$atlas.palette[-7],
-         "MonoDC_CD14" = "#E31A1C",
-         
-         "#1F78B4"
+require(RColorBrewer)
+palette <- brewer.pal(n=length(unique(DC2$functional.cluster)), name="Set2")
+
+names(palette) <- levels(DC2$functional.cluster)
+```
+
+
+```{r}
          
 # keep parameters of old version
 DC2 <- make.reference(DC2,
@@ -285,11 +312,14 @@ DC2 <- make.reference(DC2,
                       recalculate.umap = T,
                       scGate.model.human = DC@misc$scGate$human,
                       scGate.model.mouse = DC@misc$scGate$mouse,
-                      layer1_link = "CL:0000451")
+                      layer1_link = "CL:0000451",
+                      color.palette = palette)
 ```
 
 ```{r}
-upfi <- UMAPPlot(DC2)
+upfi <- UMAPPlot(DC2,
+                 cols = palette) +
+        NoAxes()
 upfi
 ```
 
@@ -300,7 +330,9 @@ p1 <- DC2@meta.data %>%
         mutate(freq = n/sum(n)) %>% 
         ggplot(aes(functional.cluster, freq,
                    fill = functional.cluster)) +
-        geom_col(show.legend = F) +
+        geom_col(show.legend = F,
+                 color = "black") +
+        scale_fill_manual(values = palette) +
         labs(y = "Relative proportions of DC subtypes") +
         theme_bw() +
         theme(axis.text.x = element_text(angle = 45,
@@ -308,6 +340,308 @@ p1 <- DC2@meta.data %>%
                                          vjust = 1))
 
 ```
+
+Check even distribution of studies
+```{r}
+all <- DC2@meta.data %>% 
+        count(functional.cluster, Study) %>% 
+        group_by(Study) %>%
+        mutate(freq = n/sum(n)) %>%
+        ggplot(aes(Study, freq, fill = functional.cluster)) +
+        geom_col(color = "black") +
+        scale_fill_manual(values = DC2@misc$atlas.palette) +
+        labs(y = "Proportion of cells") +
+        theme_bw()
+
+allp <- DC2@meta.data %>% 
+        count(functional.cluster, Study) %>% 
+        group_by(functional.cluster) %>%
+        mutate(freq = n/sum(n)) %>%
+        ggplot(aes(functional.cluster, freq, fill = Study)) +
+        geom_col(color = "black") +
+        labs(y = "Proportion of cells") +
+        theme_bw()
+```
+
+### Dotplot
+```{r}
+v2 <- DotPlot(lir$DCv2,
+              assay = "RNA",
+              cols = c("white", "red"),
+              group.by = "functional.cluster",
+              features = unique(genes4radar)) +
+        coord_flip() +
+        theme(axis.text.x = element_text(angle = 45,
+                                         hjust = 1,
+                                         vjust = 1))
+
+```
+
+
+## save reference
+```{r}
+fpath <- "~/Dropbox/CSI/reference_atlases/DC_human_ref_v2.rds"
+saveRDS(DC2, fpath)
+```
+
+
+# Test on Brown DC dataset
+```{r}
+DC2 <- load.reference.map(fpath)
+```
+
+## Load Brown
+```{r}
+ddir <- "~/Documents/Projects/Supercell_maps/HiTME/data/Brown2019_humanDC_data/Brown2019.rds"
+brown.seurat <- readRDS(ddir)
+```
+
+## annotation
+```{r}
+lir <- list("DCv1" = DC,
+            "DCv2" = DC2)
+
+rm(DC, DC2);gc()
+
+for(r in names(lir)){
+        brown.seurat <- ProjecTILs.classifier(brown.seurat,
+                                              ref = lir[[r]],
+                                              filter.cells = F)
+        
+        brown.seurat@meta.data[[r]] <- brown.seurat@meta.data$functional.cluster
+        brown.seurat@meta.data[[paste0(r, ".conf")]] <- brown.seurat@meta.data$functional.cluster.conf
+}
+```
+
+## Evaluation
+```{r}
+brown.seurat <- NormalizeData(brown.seurat) |>
+  ScaleData() |>
+  FindVariableFeatures() |>
+  RunPCA(npcs = 20) |>
+  RunUMAP(dims = 1:20)
+```
+
+### UMAPs
+```{r}
+ups <- UMAPPlot(brown.seurat,
+                group.by = c("cell_type",
+                             "DCv1","DCv2"))
+ups
+```
+### Radar plots
+```{r}
+genes4radar <- c("CLEC9A","XCR1","CADM1","CLEC10A","CD1C","CD1A",
+                 "LAMP3","CCR7","FSCN1","S100A8","S100A9","VCAN","FCN1",
+                 "GZMB","TSPAN13","TCF4","PPP1R14A","AXL", feats) 
+
+rad.li <- list()
+for(r in names(lir)){
+        rad.li[[r]] <- plot.states.radar(lir[[r]],
+                                         query=brown.seurat,
+                                         genes4radar = genes4radar,
+                                         min.cells = 5)
+}
+```
+
+
+### Violin plots
+```{r}
+vl.list <- list()
+
+for(r in names(lir)){
+        vl.list[[r]] <- VlnPlot(brown.seurat,
+                                group.by = r,
+                                features = genes4radar,
+                                stack = T,
+                                flip = T) +
+                NoLegend() +
+                labs(x = "") +
+                scale_x_discrete(limits = levels(lir[[r]]$functional.cluster)) +
+                ggtitle(r)
+        
+}
+vl.list$DCv1 + vl.list$DCv2
+
+```
+
+
+
+
+
+### Confusion matrix
+```{r}
+plot_accuracy <- function(data,
+                          ground_truth_var,
+                          prediction_var,
+                          relative = T,
+                          useNA = "no",
+                          xlab = NULL,
+                          ylab = NULL,
+                          plot.title = "") {
+  if(is.null(xlab)){
+    xlab <-  ground_truth_var
+  }
+  if(is.null(ylab)){
+    ylab <-  prediction_var
+  }
+  legend.title <- "Number of cells"
+  
+  data <- as.data.frame(data)
+  # Get counts for every group
+  pz <- table(data[,ground_truth_var],
+              data[,prediction_var],
+              useNA = useNA)
+  
+  if(relative){
+    pz <- prop.table(pz, margin = 1) %>% 
+      round(digits =2)
+    legend.title <- "Proportion of cells"
+  }
+  
+  cells <- pz %>% as.data.frame() %>% 
+    ggplot(aes(Var1, Var2,
+               fill = Freq)) + 
+    geom_tile() +
+    scale_fill_gradient(name = legend.title,
+                        low = "#ffffc8",
+                        high = "#7d0025") +
+    labs(x = xlab,
+         y = ylab) +
+    geom_label(aes(label = Freq),
+               color = "white", fill = "grey15") +
+    ggtitle(plot.title) +
+    cowplot::theme_cowplot() +
+    theme(axis.text.x = element_text(angle = 45,
+                                     hjust = 1,
+                                     vjust = 1))
+  
+  return(cells)
+  
+}
+```
+
+```{r}
+comps <- c("cell_type", "DCv1", "DCv2")
+d <- c()
+
+pa.list <- list()
+
+for(a in comps){
+        d <- c(d, a)
+        for(b in comps[!comps %in% d]){
+             pa.list[[paste(a,b, sep = "_vs_")]] <- 
+                     plot_accuracy(brown.seurat@meta.data,
+                                   a,
+                                   b,
+                                   relative = T)
+        }
+}
+
+cpa <- ggpubr::ggarrange(plotlist = pa.list,
+                         common.legend = T,
+                         legend = "bottom",
+                         ncol = 3)
+```
+
+# pseudobulk
+## Get pseudobulk
+```{r}
+ps <- AverageExpression(lir$DCv2,
+                          assays = "RNA",
+                          group.by = c("Study","functional.cluster")
+                          )[["RNA"]]
+```
+
+## Get PCA
+Normalize
+```{r}
+
+metadata <- data.frame(rn = colnames(ps)) %>%
+        tidyr::separate(rn, sep = "_",
+                        into = c("Study", "celltype"),
+                        remove = F) %>%
+        tibble::column_to_rownames("rn")
+
+nVarGenes = 500
+
+# remove black listed genes
+load("../HiTME/data/default_black_list.RData")
+ps <- ps[!rownames(ps) %in% c(unlist(black.list), "MSB4X", "TMSB4X", "B2M"),]
+
+# select most variable genes
+rv <- MatrixGenerics::rowVars(ps)
+select <- order(rv, decreasing=TRUE)[seq_len(min(nVarGenes, length(rv)))]
+select <- rownames(ps)[select]
+
+vsd <- ps[select[select %in% rownames(ps)],]
+
+pc <- stats::prcomp(t(vsd))
+
+fviz_pca(pc)
+```
+
+
+
+Do PCA
+```{r}
+# plot for PCA
+pc_sum <- summary(pc)
+PC1_varexpl <- pc_sum$importance[2,"PC1"]
+PC2_varexpl <- pc_sum$importance[2,"PC2"]
+
+# get first 2 PC
+pc.df <- pc$x[,1:2] %>% as.data.frame() %>%
+        tibble::rownames_to_column("sample_celltype") %>%
+        left_join(., metadata %>% tibble::rownames_to_column("sample_celltype"),
+                  by = "sample_celltype")
+
+pc.pl <- pc.df %>%
+        ggplot2::ggplot(ggplot2::aes(PC1, PC2,
+                                     color = Study)) +
+        ggplot2::geom_point() +
+        ggplot2::guides(color=guide_legend(ncol=2))+
+        labs(
+             y = paste0("PC2 (", PC2_varexpl*100, " %)"),
+             x = paste0("PC1 (", PC1_varexpl*100, " %)"))+
+        ggplot2::theme(
+                panel.background = element_rect(fill = "white"),
+                legend.key = element_rect(fill = "white")
+        )
+pc.pl
+```
+
+```{r}
+up <- umap::umap(pc$x[,1:10])
+
+up.df <- up$layout
+colnames(up.df) <- c("UMAP_1", "UMAP_2")
+
+up.df <- up.df %>% 
+        as.data.frame() %>% 
+        tibble::rownames_to_column("sample_celltype") %>%
+        left_join(., metadata %>% tibble::rownames_to_column("sample_celltype"),
+                  by = "sample_celltype")
+
+up.pl <- up.df %>%
+        ggplot2::ggplot(ggplot2::aes(UMAP_1, UMAP_2,
+                                     color = Study)) +
+        ggplot2::geom_point() +
+        ggplot2::guides(color=guide_legend(ncol=2))+
+        ggplot2::theme(
+                panel.background = element_rect(fill = "white"),
+                legend.key = element_rect(fill = "white")
+        )
+up.pl
+```
+
+
+
+
+
+
+
+
 
 
 
