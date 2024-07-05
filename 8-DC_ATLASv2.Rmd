@@ -386,8 +386,9 @@ saveRDS(DC2, fpath)
 
 
 # Test on Brown DC dataset
+## Load new reference
 ```{r}
-DC2 <- load.reference.map(fpath)
+DC2 <- ProjecTILs::load.reference.map(fpath)
 ```
 
 ## Load Brown
@@ -553,15 +554,41 @@ ps <- AverageExpression(lir$DCv2,
                           )[["RNA"]]
 ```
 
-## Get PCA
-Normalize
-```{r}
 
+## Desnormalize counts
+```{r, eval = F}
+source("../scRNAseq_data_processing/Rutils/ReverseNormalize.R")
+
+raw <- apply(DC@assays$RNA$counts, 2, reverseNormalize)
+
+raw[1:50,1:10] %>% View()
+DC@assays$RNA$counts[1:50,1:10] %>% as.matrix() %>% View()
+
+
+DC.raw <- CreateSeuratObject(counts = raw,
+                             meta.data = DC@meta.data)
+
+ps <- AggregateExpression(DC.raw,
+                              group.by = c("Study","functional.cluster")
+                          )[["RNA"]]
+```
+
+!! Normalization reverse not possible, as some datasets are from SmartSeq2 technology
+
+```{r}
 metadata <- data.frame(rn = colnames(ps)) %>%
         tidyr::separate(rn, sep = "_",
                         into = c("Study", "celltype"),
                         remove = F) %>%
         tibble::column_to_rownames("rn")
+```
+
+
+
+
+## Get PCA
+Normalize
+```{r}
 
 nVarGenes = 500
 
@@ -634,6 +661,86 @@ up.pl <- up.df %>%
         )
 up.pl
 ```
+
+## Sex of the samples
+```{r}
+sgenes <- c("XIST", "RPS4Y1")
+ps.sex <- AverageExpression(DC,
+                            group.by = "Study")[["RNA"]][sgenes,] %>% 
+  t() %>% 
+  as.data.frame()
+
+
+ps.sex <- ps.sex %>% 
+  mutate(sex = log2(XIST/RPS4Y1))
+```
+
+## Heatmap pseudobulk
+Functions below not working, is it for the Seurat version??
+```{r, eval = F}
+
+remotes::install_version("Seurat", version = "4.3.0.1")
+remotes::install_version("SeuratObject", version = "4.1.3")
+.rs.restartR()
+```
+
+
+
+```{r}
+require(ProjecTILs)
+require(BiocParallel)
+
+# top most DE genes
+top <- 10
+
+
+heatli <- bplapply(names(lir),
+                   BPPARAM = MulticoreParam(workers = 2, progressbar = T),
+                   function(r){
+                     DefaultAssay(lir[[r]]) <- "RNA"
+                     
+                     gmark <- NormalizeData(lir[[r]]) %>% 
+                       FindAllMarkers.bygroup(
+                         assay = "RNA",
+                         split.by = "Study",
+                         min.cells.group = 5,
+                         min.pct = 0.5,
+                         min.diff.pct = 0.2,
+                         logfc.threshold = 1,
+                         min.freq = 0.4)
+                     
+                     gene.use <- lapply(gmark,
+                                        function(df){
+                                          df %>% 
+                                            arrange(desc(avg.FC)) %>% 
+                                            head(top) %>% 
+                                            pull(Gene)
+                                        }) %>%
+                       unlist() 
+                     
+                     h <- celltype.heatmap(lir[[r]],
+                                           group.by = "Study",
+                                           genes = gene.use,
+                                           min.cells = 5,
+                                          cluster_samples = T)
+                     
+                     return(h)
+                     
+                   })
+names(heatli) <- names(lir)
+
+```
+
+
+```{r}
+tt = FindAllMarkers(lir$DCv1)
+```
+
+
+
+
+
+
 
 
 
